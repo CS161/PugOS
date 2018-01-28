@@ -94,6 +94,16 @@ void memusage::refresh() {
             }
         }
     }
+
+    // mark cpu idle task pages
+    if (ncpu > 1) {
+        for (int i = 0; i < ncpu; i++) {
+            mark(ka2pa(cpus[i].idle_task()), f_kernel);
+        }
+    }
+
+    // mark v_ page
+    mark(ka2pa(v_), f_kernel);
 }
 
 
