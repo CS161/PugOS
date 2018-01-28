@@ -74,6 +74,7 @@ void panic(const char* format, ...) __attribute__((noinline, noreturn));
 #define SYSCALL_PAGE_ALLOC      5
 #define SYSCALL_FORK            6
 #define SYSCALL_EXIT            7
+#define SYSCALL_MAP_CONSOLE     8
 
 
 // Console printing

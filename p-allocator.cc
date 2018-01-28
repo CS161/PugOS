@@ -14,6 +14,12 @@ void process_main(void) {
     pid_t p = sys_getpid();
     srand(p);
 
+    // Console testing
+    sys_map_console(console);
+    for (int i = 0; i < CONSOLE_ROWS * CONSOLE_COLUMNS; ++i) {
+      console[i] = '*' | 0x5000;
+    }
+
     // The heap starts on the page right after the 'end' symbol,
     // whose address is the first address not allocated to process code
     // or data.

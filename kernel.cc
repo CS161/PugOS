@@ -174,6 +174,15 @@ uintptr_t proc::syscall(regstate* regs) {
         // Your code here
         return -1;
 
+    case SYSCALL_MAP_CONSOLE: {
+        uintptr_t addr = regs->reg_rdi;
+        if (addr > VA_LOWMAX || addr & 0xFFF) {
+            return -1;
+        }
+        int r = vmiter(this, addr).map(ktext2pa(console), PTE_P|PTE_W|PTE_U);
+        return 0;
+    }
+
     default:
         // no such system call
         log_printf("%d: no such system call %u\n", pid_, regs->reg_rax);

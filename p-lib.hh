@@ -83,6 +83,12 @@ static inline pid_t __attribute__((noreturn)) sys_panic(const char* msg) {
     }
 }
 
+// sys_map_console(addr)
+//    Map console memory to addr in process' virtual memory. Returns -1 on
+//    failure.
+static inline int sys_map_console(void* addr) {
+    return syscall0(SYSCALL_MAP_CONSOLE, reinterpret_cast<uintptr_t>(addr));
+}
 
 // OTHER HELPER FUNCTIONS
 
