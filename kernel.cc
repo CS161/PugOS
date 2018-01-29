@@ -69,8 +69,7 @@ pid_t process_fork(proc* oldp) {
 
     auto irqs = ptable_lock.lock();
     for (pid_t i = 1; i < NPROC; i++) {
-        if (!ptable[i]
-            | (ptable[i] && ptable[i]->state_ == proc::blank)) {
+        if (!ptable[i] || ptable[i]->state_ == proc::blank) {
             fpid = i;
             log_printf("Forking into pid %d\n", fpid);
             break;
