@@ -1,5 +1,5 @@
 #include "p-lib.hh"
-#define ALLOC_SLOWDOWN 100
+#define ALLOC_SLOWDOWN 10000
 
 extern uint8_t end[];
 

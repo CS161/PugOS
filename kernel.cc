@@ -61,7 +61,7 @@ void process_setup(pid_t pid, const char* name) {
 
 
 // 
-pid_t process_fork(proc* oldp) {
+pid_t process_fork(proc* ogproc) {
     log_printf("-HIGHMEM_BASE = %p\n", -HIGHMEM_BASE);
 
     // 1. Allocate a new PID.
@@ -75,10 +75,8 @@ pid_t process_fork(proc* oldp) {
             break;
         }
     }
-    if (fpid < 1) {
-        // No free process slot found
-        return -1;
-    }
+    // No free process slot found
+    if (fpid < 1) return -1;
 
     // 2. Allocate a struct proc and a page table.
     // 5. Store the new process in the process table.
@@ -90,7 +88,7 @@ pid_t process_fork(proc* oldp) {
 
     // 3. Copy the parent process’s user-accessible memory and map the copies
     // into the new process’s page table.
-    for (vmiter source(oldp); source.low(); source.next()) {
+    for (vmiter source(ogproc); source.low(); source.next()) {
         if (source.user() && source.writable()) {
             uintptr_t npage = ka2pa(kallocpage());
             if (!npage) return -1;
@@ -98,12 +96,17 @@ pid_t process_fork(proc* oldp) {
                        "to new page at %p\n", PAGESIZE, source.pa(), npage);
             memcpy(reinterpret_cast<void*>(pa2ka(npage)),
                    reinterpret_cast<void*>(pa2ka(source.pa())), PAGESIZE);
-            if (!vmiter(fpt, source.va()).map(npage, source.perm()))
+            if (vmiter(fpt, source.va()).map(npage, source.perm()) < 0) {
+                log_printf("Errored out on writable page, bad map\n\tnpage = %p"
+                           "; source.va() = %p\n", npage, source.va());
                 return -1;
+            }
         }
         else if (source.user()) {
-            if (!vmiter(fpt, source.va()).map(source.pa(), source.perm()))
+            if (vmiter(fpt, source.va()).map(source.pa(), source.perm()) < 0) {
+                log_printf("Errored out on non-writable page, bad map\n");
                 return -1;
+            }
         }
     }
 
@@ -112,7 +115,7 @@ pid_t process_fork(proc* oldp) {
 
     // 4. Initialize the new process’s registers to a copy of the old process’s
     // registers.
-    fproc->regs_ = oldp->regs_;
+    fproc->regs_ = ogproc->regs_;
 
     // 6. Enqueue the new process on some CPU’s run queue.
     int cpu = fpid % ncpu;
@@ -122,7 +125,7 @@ pid_t process_fork(proc* oldp) {
 
     // 7. Arrange for the new PID to be returned to the parent process and 0 to
     // be returned to the child process.
-    fproc->regs_->reg_rax = 0;
+    fproc->regs_->reg_rax = 3;
     return fpid;
 }
 
