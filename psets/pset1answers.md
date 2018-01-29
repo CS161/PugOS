@@ -62,6 +62,9 @@ There is one page allocated to store v_ in memusage::refresh(), and then where n
 ### B.7
 See code
 
+### C
+See code
+
 
 Grading notes
 -------------

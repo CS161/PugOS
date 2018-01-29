@@ -60,6 +60,74 @@ void process_setup(pid_t pid, const char* name) {
 }
 
 
+// 
+pid_t process_fork(proc* oldp) {
+    log_printf("-HIGHMEM_BASE = %p\n", -HIGHMEM_BASE);
+
+    // 1. Allocate a new PID.
+    pid_t fpid = -1;
+
+    auto irqs = ptable_lock.lock();
+    for (pid_t i = 1; i < NPROC; i++) {
+        if (!ptable[i]
+            | (ptable[i] && ptable[i]->state_ == proc::blank)) {
+            fpid = i;
+            log_printf("Forking into pid %d\n", fpid);
+            break;
+        }
+    }
+    if (fpid < 1) {
+        // No free process slot found
+        return -1;
+    }
+
+    // 2. Allocate a struct proc and a page table.
+    // 5. Store the new process in the process table.
+    proc* fproc = ptable[fpid] = reinterpret_cast<proc*>(kallocpage());
+    fproc->state_ = proc::broken;
+    ptable_lock.unlock(irqs);
+    x86_64_pagetable* fpt = kalloc_pagetable();
+    assert(fproc && fpt);
+
+    // 3. Copy the parent process’s user-accessible memory and map the copies
+    // into the new process’s page table.
+    for (vmiter source(oldp); source.low(); source.next()) {
+        if (source.user() && source.writable()) {
+            uintptr_t npage = ka2pa(kallocpage());
+            if (!npage) return -1;
+            log_printf("Attempting to copy user-writable page (%d bytes) at %p "
+                       "to new page at %p\n", PAGESIZE, source.pa(), npage);
+            memcpy(reinterpret_cast<void*>(pa2ka(npage)),
+                   reinterpret_cast<void*>(pa2ka(source.pa())), PAGESIZE);
+            if (!vmiter(fpt, source.va()).map(npage, source.perm()))
+                return -1;
+        }
+        else if (source.user()) {
+            if (!vmiter(fpt, source.va()).map(source.pa(), source.perm()))
+                return -1;
+        }
+    }
+
+    // Initialize fproc structure (note: sets registers wrong)
+    fproc->init_user(fpid, fpt);
+
+    // 4. Initialize the new process’s registers to a copy of the old process’s
+    // registers.
+    fproc->regs_ = oldp->regs_;
+
+    // 6. Enqueue the new process on some CPU’s run queue.
+    int cpu = fpid % ncpu;
+    cpus[cpu].runq_lock_.lock_noirq();
+    cpus[cpu].enqueue(fproc);
+    cpus[cpu].runq_lock_.unlock_noirq();
+
+    // 7. Arrange for the new PID to be returned to the parent process and 0 to
+    // be returned to the child process.
+    fproc->regs_->reg_rax = 0;
+    return fpid;
+}
+
+
 // proc::exception(reg)
 //    Exception handler (for interrupts, traps, and faults).
 //
@@ -170,9 +238,9 @@ uintptr_t proc::syscall(regstate* regs) {
         return 0;
     }
 
-    case SYSCALL_FORK:
-        // Your code here
-        return -1;
+    case SYSCALL_FORK: {
+        return process_fork(this);
+    }
 
     case SYSCALL_MAP_CONSOLE: {
         uintptr_t addr = regs->reg_rdi;
