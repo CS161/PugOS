@@ -60,8 +60,9 @@ void process_setup(pid_t pid, const char* name) {
 }
 
 
-// 
-pid_t process_fork(proc* ogproc) {
+// process_fork(ogproc, ogregs)
+//    Fork the process ogproc into the first available pid.
+pid_t process_fork(proc* ogproc, regstate* ogregs) {
     log_printf("-HIGHMEM_BASE = %p\n", -HIGHMEM_BASE);
 
     // 1. Allocate a new PID.
@@ -84,7 +85,7 @@ pid_t process_fork(proc* ogproc) {
     fproc->state_ = proc::broken;
     ptable_lock.unlock(irqs);
     x86_64_pagetable* fpt = kalloc_pagetable();
-    assert(fproc && fpt);
+    if (!fproc || !fpt) return -1;
 
     // 3. Copy the parent process’s user-accessible memory and map the copies
     // into the new process’s page table.
@@ -115,7 +116,7 @@ pid_t process_fork(proc* ogproc) {
 
     // 4. Initialize the new process’s registers to a copy of the old process’s
     // registers.
-    fproc->regs_ = ogproc->regs_;
+    *fproc->regs_ = *ogregs;
 
     // 6. Enqueue the new process on some CPU’s run queue.
     int cpu = fpid % ncpu;
@@ -125,7 +126,7 @@ pid_t process_fork(proc* ogproc) {
 
     // 7. Arrange for the new PID to be returned to the parent process and 0 to
     // be returned to the child process.
-    fproc->regs_->reg_rax = 3;
+    fproc->regs_->reg_rax = 0;
     return fpid;
 }
 
@@ -241,7 +242,7 @@ uintptr_t proc::syscall(regstate* regs) {
     }
 
     case SYSCALL_FORK: {
-        return process_fork(this);
+        return process_fork(this, regs);
     }
 
     case SYSCALL_MAP_CONSOLE: {
