@@ -33,7 +33,7 @@ CPPFLAGS := $(DEFS) -I.
 
 CCOMMONFLAGS := -m64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mno-sse3 \
 	-mno-3dnow -ffreestanding -fno-omit-frame-pointer -fno-pic \
-	-Wall -W -Wshadow -Wno-format -Wno-unused
+	-Wall -W -Wshadow -Wno-format -Wno-unused -Wstack-usage=4000
 # Include -fno-stack-protector if the option exists.
 CCOMMONFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 

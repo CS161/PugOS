@@ -70,12 +70,14 @@ See code
 
 ### E.1
 Kernel entry points:
-
 1. cpustate::schedule (called from k-exception.S:217 proc::yield() and proc::yield_noreturn(), to yield to other processes)
 2. kernel_start() (called from k-exception.S:19 kernel_entry, to set up the kernel)
 3. proc::exception() (called from k-exception.S:74 exception_entry, to handle exceptions in kernel mode)
 4. proc::syscall() (called from k-exception.S:174 syscall_entry, to handle system calls in kernel mode)
 5. cpustate::init_ap() (called from k-exception.S:324 ap_rest, initializing an application processor)
+
+Process entry points:
+1. process_main() (called on running a process)
 
 ### E.2
 
@@ -85,6 +87,8 @@ Kernel entry points:
 4. proc::syscall() correctly aligned
 5. cpustate::init_ap() not correctly aligned
 
+process_main() not correctly aligned
+
 ### E.3
 
 1. cpustate::schedule() fiexd in ???
@@ -92,6 +96,15 @@ Kernel entry points:
 3. proc::exception() --
 4. proc::syscall() --
 5. cpustate::init_ap() fixed in ???
+
+### F.1
+See sys_commit_seppuku()
+
+### F.2
+See kernel.cc:check_corruption()
+
+### F.3
+-Wstack-usage=4000 detects the problem. There is likely a slightly more accurate number to test, which would probably be something closer to 4096, but 4000 is large enough to not get false negatives and catches the problem
 
 Grading notes
 -------------

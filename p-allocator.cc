@@ -7,8 +7,11 @@ uint8_t* heap_top;
 uint8_t* stack_bottom;
 
 void process_main(void) {
+    uintptr_t rbp;
+    asm volatile("movq %%rbp,%0" : "=r" (rbp));
+    assert(rbp % 16 == 0);
+
     // Fork three new copies. (But ignore failures.)
-    sys_commit_seppuku();
     (void) sys_fork();
     (void) sys_fork();
 
