@@ -37,6 +37,7 @@ struct __attribute__((aligned(4096))) cpustate {
     uint64_t gdt_segments_[7];
     x86_64_taskstate task_descriptor_;
 
+    int canary_;
 
     cpustate() = default;
     NO_COPY_OR_ASSIGN(cpustate);
@@ -78,6 +79,7 @@ struct __attribute__((aligned(4096))) proc {
     proc** runq_pprev_;
     proc* runq_next_;
 
+    int canary_;
 
     proc() = default;
     NO_COPY_OR_ASSIGN(proc);
@@ -101,6 +103,8 @@ struct __attribute__((aligned(4096))) proc {
 extern proc* ptable[NPROC];
 extern spinlock ptable_lock;
 #define KTASKSTACK_SIZE  4096
+
+extern int canary_value;
 
 
 // yieldstate: callee-saved registers that must be preserved across
@@ -250,7 +254,7 @@ void timer_init(int rate);
 
 
 // kernel page table (used for virtual memory)
-extern x86_64_pagetable early_pagetable[2];
+extern x86_64_pagetable early_pagetable[3];
 
 // allocate and initialize a new page table
 x86_64_pagetable* kalloc_pagetable();

@@ -31,6 +31,8 @@ void cpustate::init() {
     idle_task_ = nullptr;
     spinlock_depth_ = 0;
 
+    canary_ = canary_value;
+
     // now initialize the CPU hardware
     init_cpu_hardware();
 }
@@ -56,6 +58,7 @@ void cpustate::enqueue(proc* p) {
 void cpustate::schedule(proc* yielding_from) {
     assert(is_cli());              // interrupts are currently disabled
     assert(spinlock_depth_ == 0);  // no spinlocks are held
+    assert(read_rbp() % 16 == 0);  // check stack alignment
 
     // do not run idle task unless nothing else is runnable
     if (current_ == idle_task_) {

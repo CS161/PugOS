@@ -24,6 +24,7 @@ void proc::init_user(pid_t pid, x86_64_pagetable* pt) {
     assert(pt->entry[511] == early_pagetable->entry[511]);
 
     pid_ = pid;
+    canary_ = canary_value;
 
     regs_ = reinterpret_cast<regstate*>(addr + KTASKSTACK_SIZE) - 1;
     memset(regs_, 0, sizeof(regstate));
@@ -53,6 +54,7 @@ void proc::init_kernel(pid_t pid, void (*f)(proc*)) {
     assert(!(addr & PAGEOFFMASK));
 
     pid_ = pid;
+    canary_ = canary_value;
 
     regs_ = reinterpret_cast<regstate*>(addr + KTASKSTACK_SIZE) - 1;
     memset(regs_, 0, sizeof(regstate));

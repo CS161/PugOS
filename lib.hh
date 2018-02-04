@@ -75,6 +75,7 @@ void panic(const char* format, ...) __attribute__((noinline, noreturn));
 #define SYSCALL_FORK            6
 #define SYSCALL_EXIT            7
 #define SYSCALL_MAP_CONSOLE     8
+#define SYSCALL_COMMIT_SEPPUKU  44
 
 
 // Console printing

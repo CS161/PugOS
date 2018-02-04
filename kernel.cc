@@ -17,6 +17,8 @@ static void process_setup(pid_t pid, const char* program_name);
 //    string is an optional string passed from the boot loader.
 
 void kernel_start(const char* command) {
+    assert(read_rbp() % 16 == 0);  // check stack alignment
+
     hardware_init();
     console_clear();
 
@@ -93,19 +95,14 @@ pid_t process_fork(proc* ogproc, regstate* ogregs) {
         if (source.user() && source.writable()) {
             uintptr_t npage = ka2pa(kallocpage());
             if (!npage) return -1;
-            log_printf("Attempting to copy user-writable page (%d bytes) at %p "
-                       "to new page at %p\n", PAGESIZE, source.pa(), npage);
             memcpy(reinterpret_cast<void*>(pa2ka(npage)),
                    reinterpret_cast<void*>(pa2ka(source.pa())), PAGESIZE);
             if (vmiter(fpt, source.va()).map(npage, source.perm()) < 0) {
-                log_printf("Errored out on writable page, bad map\n\tnpage = %p"
-                           "; source.va() = %p\n", npage, source.va());
                 return -1;
             }
         }
         else if (source.user()) {
             if (vmiter(fpt, source.va()).map(source.pa(), source.perm()) < 0) {
-                log_printf("Errored out on non-writable page, bad map\n");
                 return -1;
             }
         }
@@ -131,6 +128,31 @@ pid_t process_fork(proc* ogproc, regstate* ogregs) {
 }
 
 
+int canary_value = rand();
+// check_corruption(p)
+//    Check for data corruption in current cpustate and proc structs by looking
+//    at the canary values. If the stack got too big and overwrote data, we will
+//    know because the saved canary values will have changed.
+
+void check_corruption(proc* p) {
+    cpustate* c = &cpus[p->pid_ % ncpu];
+    assert(p->canary_ == canary_value);
+    assert(c->canary_ == canary_value);
+}
+
+
+// seppuku()
+//    Die an honorable death
+
+int seppuku() {
+    int big[1000];
+    for (int i = 0; i < 1000; i++) {
+        big[i] = i;
+    }
+    return big[934];
+}
+
+
 // proc::exception(reg)
 //    Exception handler (for interrupts, traps, and faults).
 //
@@ -144,6 +166,8 @@ void proc::exception(regstate* regs) {
     // It can be useful to log events using `log_printf`.
     // Events logged this way are stored in the host's `log.txt` file.
     /*log_printf("proc %d: exception %d\n", this->pid_, regs->reg_intno);*/
+
+    assert(read_rbp() % 16 == 0);  // check stack alignment
 
     // Show the current cursor location.
     console_show_cursor(cursorpos);
@@ -207,6 +231,9 @@ void proc::exception(regstate* regs) {
 //    process in `%rax`.
 
 uintptr_t proc::syscall(regstate* regs) {
+    assert(read_rbp() % 16 == 0);  // check stack alignment
+
+    uintptr_t r = -1;
     switch (regs->reg_rax) {
 
     case SYSCALL_PANIC:
@@ -214,22 +241,25 @@ uintptr_t proc::syscall(regstate* regs) {
         break;                  // will not be reached
 
     case SYSCALL_GETPID:
-        return pid_;
+        r = pid_;
+        break;
 
     case SYSCALL_YIELD:
         this->yield();
-        return 0;
+        r = 0;
+        break;
 
     case SYSCALL_PAGE_ALLOC: {
         uintptr_t addr = regs->reg_rdi;
         if (addr >= 0x800000000000 || addr & 0xFFF) {
-            return -1;
+            break;
         }
         x86_64_page* pg = kallocpage();
         if (!pg || vmiter(this, addr).map(ka2pa(pg)) < 0) {
-            return -1;
+            break;
         }
-        return 0;
+        r = 0;
+        break;
     }
 
     case SYSCALL_PAUSE: {
@@ -238,28 +268,40 @@ uintptr_t proc::syscall(regstate* regs) {
             pause();
         }
         cli();
-        return 0;
+        r = 0;
+        break;
     }
 
     case SYSCALL_FORK: {
-        return process_fork(this, regs);
+        r = process_fork(this, regs);
+        break;
     }
 
     case SYSCALL_MAP_CONSOLE: {
         uintptr_t addr = regs->reg_rdi;
         if (addr > VA_LOWMAX || addr & 0xFFF) {
-            return -1;
+            break;
         }
-        int r = vmiter(this, addr).map(ktext2pa(console), PTE_P|PTE_W|PTE_U);
-        return 0;
+        if (vmiter(this, addr).map(ktext2pa(console), PTE_P|PTE_W|PTE_U) < 0) {
+            break;
+        }
+        r = 0;
+        break;
+    }
+
+    case SYSCALL_COMMIT_SEPPUKU: {
+        r = seppuku();
+        break;
     }
 
     default:
         // no such system call
         log_printf("%d: no such system call %u\n", pid_, regs->reg_rax);
-        return -1;
-
+        break;
     }
+
+    check_corruption(this);
+    return r;
 }
 
 

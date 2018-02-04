@@ -1,5 +1,5 @@
 #include "p-lib.hh"
-#define ALLOC_SLOWDOWN 100
+#define ALLOC_SLOWDOWN 1
 
 extern uint8_t end[];
 
@@ -8,6 +8,7 @@ uint8_t* stack_bottom;
 
 void process_main(void) {
     // Fork three new copies. (But ignore failures.)
+    sys_commit_seppuku();
     (void) sys_fork();
     (void) sys_fork();
 
@@ -15,9 +16,9 @@ void process_main(void) {
     srand(p);
 
     // Console testing
+    sys_map_console(console);
     bool test_console = false;
     if (test_console) {
-        sys_map_console(console);
         for (int i = 0; i < CONSOLE_ROWS * CONSOLE_COLUMNS; ++i) {
           console[i] = '*' | 0x5000;
         }

@@ -88,7 +88,7 @@ static void set_gate(x86_64_gatedescriptor* gate, int type, int dpl,
     gate->gd_high = function >> 32;
 }
 
-x86_64_pagetable __section(".lowdata") early_pagetable[2];
+x86_64_pagetable __section(".lowdata") early_pagetable[3];
 uint64_t __section(".lowdata") early_gdt_segments[3];
 x86_64_pseudodescriptor __section(".lowdata") early_gdt;
 
@@ -109,15 +109,15 @@ void init_early_memory() {
     memset(early_pagetable, 0, sizeof(early_pagetable));
     // high canonical addresses
     early_pagetable->entry[256] = ktext2pa(&early_pagetable[1]) | PTE_P | PTE_W;
-    for (uintptr_t p = 0; p < 510; ++p) {
+    for (uintptr_t p = 0; p < 512; ++p) {
         early_pagetable[1].entry[p] = (p << 30) | PTE_P | PTE_W | PTE_PS;
     }
-    // kernel text addresses
-    early_pagetable->entry[511] = early_pagetable->entry[256];
-    early_pagetable[1].entry[510] = early_pagetable[1].entry[0];
-    early_pagetable[1].entry[511] = early_pagetable[1].entry[1];
     // physically-mapped low canonical addresses
     early_pagetable->entry[0] = early_pagetable->entry[256];
+    // kernel text addresses
+    early_pagetable->entry[511] = ktext2pa(&early_pagetable[2]) | PTE_P | PTE_W;
+    early_pagetable[2].entry[510] = early_pagetable[0].entry[0];
+    early_pagetable[2].entry[511] = early_pagetable[0].entry[1];
 
     lcr3(ktext2pa(early_pagetable));
 
@@ -292,6 +292,8 @@ extern bool ap_init_allowed;
 }
 
 void cpustate::init_ap() {
+    assert(read_rbp() % 16 == 0);  // check stack alignment
+
     init();
     ap_entry_lock.unlock_noirq();
     schedule(nullptr);
