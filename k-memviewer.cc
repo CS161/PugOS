@@ -96,9 +96,9 @@ void memusage::refresh() {
     }
 
     // mark cpu idle task pages
-    if (ncpu > 1) {
-        for (int i = 0; i < ncpu; i++) {
-            mark(ka2pa(cpus[i].idle_task()), f_kernel);
+    for (int i = 0; i < ncpu; i++) {
+        if(cpus[i].idle_task_) {
+            mark(ka2pa(cpus[i].idle_task_), f_kernel);
         }
     }
 
