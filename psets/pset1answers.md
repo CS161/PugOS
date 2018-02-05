@@ -7,11 +7,11 @@ Answers to written questions
 ----------------------------
 
 ### A.1
-First address returned: 0xffff800000001000
+First address returned: 0xffff'8000'0000'1000
 This is because the kernel is allocating this first page, so it is a high canonical address, because the kernel maps its memory in high virtual addresses.
 
 ### A.2
-Highest address: 0xffff8000001ff000
+Highest address: 0xffff'8000'001f'f000
 
 ### A.3
 High canonical (kernel) addresses. Line 17 (`p = pa2ka<x86_64_page*>(next_free_pa);`) determines this
@@ -22,16 +22,12 @@ k-init.cc:177 from `physical_ranges.set(0, MEMSIZE_PHYSICAL, mem_available);` to
 ### A.5
 ```
     // skip over reserved and kernel memory
-    while (next_free_pa != physical_ranges.limit()) {
+    while (!p && next_free_pa != physical_ranges.limit()) {
         if (physical_ranges.type(next_free_pa) == mem_available) {
             // use this page
             p = pa2ka<x86_64_page*>(next_free_pa);
-            next_free_pa += PAGESIZE;
-            break;
-        } else {
-            // move to next range
-            next_free_pa += PAGESIZE;
         }
+        next_free_pa += PAGESIZE;
     }
 ```
 
@@ -39,7 +35,7 @@ k-init.cc:177 from `physical_ranges.set(0, MEMSIZE_PHYSICAL, mem_available);` to
 The original find() loop is faster, because it can skip over entire ranges of memory that have the wrong type, while the new type() version can't
 
 ### A.7
-Having no page_lock would introduce race conditions. A page could be allocated twice
+Having no page_lock would introduce race conditions. A page could be allocated twice (to multiple cores)
 
 ### B.1
 k-memviewer.cc:73 `mark(pa, f_kernel);`
@@ -75,6 +71,7 @@ Kernel entry points:
 3. proc::exception() (called from k-exception.S:74 exception_entry, to handle exceptions in kernel mode)
 4. proc::syscall() (called from k-exception.S:174 syscall_entry, to handle system calls in kernel mode)
 5. cpustate::init_ap() (called from k-exception.S:324 ap_rest, initializing an application processor)
+6. cpustate::idle_task() (called to create or return an idle task, and allocates a new stack when creating an idle task)
 
 Process entry points:
 1. process_main() (called on running a process)
@@ -86,6 +83,7 @@ Kernel entry points:
 3. proc::exception() correctly aligned
 4. proc::syscall() correctly aligned
 5. cpustate::init_ap() not correctly aligned
+6. cpustate::idle_task() correctly aligned
 
 Process entry points:
 1. process_main() not correctly aligned

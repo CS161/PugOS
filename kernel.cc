@@ -66,8 +66,6 @@ void process_setup(pid_t pid, const char* name) {
 // process_fork(ogproc, ogregs)
 //    Fork the process ogproc into the first available pid.
 pid_t process_fork(proc* ogproc, regstate* ogregs) {
-    log_printf("-HIGHMEM_BASE = %p\n", -HIGHMEM_BASE);
-
     // 1. Allocate a new PID.
     pid_t fpid = -1;
 
@@ -75,7 +73,6 @@ pid_t process_fork(proc* ogproc, regstate* ogregs) {
     for (pid_t i = 1; i < NPROC; i++) {
         if (!ptable[i] || ptable[i]->state_ == proc::blank) {
             fpid = i;
-            log_printf("Forking into pid %d\n", fpid);
             break;
         }
     }

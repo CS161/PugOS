@@ -123,6 +123,7 @@ proc* cpustate::idle_task() {
     if (!idle_task_) {
         idle_task_ = reinterpret_cast<proc*>(kallocpage());
         idle_task_->init_kernel(-1, idle);
+        assert(idle_task_->regs_->reg_rbp % 16 == 0);
     }
     return idle_task_;
 }
