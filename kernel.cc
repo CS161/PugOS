@@ -54,6 +54,7 @@ void process_setup(pid_t pid, const char* name) {
     x86_64_page* stkpg = kallocpage();
     assert(stkpg);
     vmiter(p, p->regs_->reg_rsp - PAGESIZE).map(ka2pa(stkpg));
+    p->regs_->reg_rsp -= 8;     // align stack by 16 bytes
 
     int cpu = pid % ncpu;
     cpus[cpu].runq_lock_.lock_noirq();

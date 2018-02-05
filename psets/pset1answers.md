@@ -97,6 +97,8 @@ process_main() not correctly aligned
 4. proc::syscall() --
 5. cpustate::init_ap() fixed in ???
 
+1. process_main() fixed in kernel.cc:process_setup()
+
 ### F.1
 See sys_commit_seppuku()
 
