@@ -80,23 +80,22 @@ Process entry points:
 1. process_main() (called on running a process)
 
 ### E.2
-
+Kernel entry points:
 1. cpustate::schedule() not correctly aligned
 2. kernel_start() correctly aligned
 3. proc::exception() correctly aligned
 4. proc::syscall() correctly aligned
 5. cpustate::init_ap() not correctly aligned
 
-process_main() not correctly aligned
+Process entry points:
+1. process_main() not correctly aligned
 
 ### E.3
+Kernel entry points:
+1. cpustate::schedule() fixed in proc::yield and proc::yield_noreturn
+5. cpustate::init_ap() fixed in ap_rest
 
-1. cpustate::schedule() fiexd in ???
-2. kernel_start() --
-3. proc::exception() --
-4. proc::syscall() --
-5. cpustate::init_ap() fixed in ???
-
+Process entry points:
 1. process_main() fixed in kernel.cc:process_setup()
 
 ### F.1
