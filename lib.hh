@@ -1,6 +1,7 @@
 #ifndef CHICKADEE_LIB_HH
 #define CHICKADEE_LIB_HH
 #include "types.h"
+#include <type_traits>
 
 // lib.hh
 //
@@ -9,6 +10,7 @@
 //
 //    Contents: (1) C library subset, (2) system call numbers, (3) console.
 
+extern "C" {
 void* memcpy(void* dst, const void* src, size_t n);
 void* memmove(void* dst, const void* src, size_t n);
 void* memset(void* s, int c, size_t n);
@@ -20,16 +22,19 @@ int strcmp(const char* a, const char* b);
 char* strchr(const char* s, int c);
 int snprintf(char* s, size_t size, const char* format, ...);
 int vsnprintf(char* s, size_t size, const char* format, va_list val);
+}
 
 #define RAND_MAX 0x7FFFFFFF
 int rand();
 void srand(unsigned seed);
+int rand(int min, int max);
+
 
 // Return the offset of `member` relative to the beginning of a struct type
 #define offsetof(type, member)  __builtin_offsetof(type, member)
 
 // Return the number of elements in an array
-#define arraysize(array)  (sizeof(array) / sizeof(array[0]))
+#define arraysize(array)        (sizeof(array) / sizeof(array[0]))
 
 
 // Assertions
@@ -63,6 +68,44 @@ void panic(const char* format, ...) __attribute__((noinline, noreturn));
 #define ROUNDUP(a, n) ({                                        \
         uint64_t __n = (uint64_t) (n);                          \
         (typeof(a)) (ROUNDDOWN((uint64_t) (a) + __n - 1, __n)); })
+
+// msb(x)
+//    Return index of most significant bit in `x`, plus one.
+//    Returns 0 if `x == 0`.
+inline constexpr int msb(int x) {
+    return x ? sizeof(x) * 8 - __builtin_clz(x) : 0;
+}
+inline constexpr int msb(unsigned x) {
+    return x ? sizeof(x) * 8 - __builtin_clz(x) : 0;
+}
+inline constexpr int msb(long x) {
+    return x ? sizeof(x) * 8 - __builtin_clzl(x) : 0;
+}
+inline constexpr int msb(unsigned long x) {
+    return x ? sizeof(x) * 8 - __builtin_clzl(x) : 0;
+}
+inline constexpr int msb(long long x) {
+    return x ? sizeof(x) * 8 - __builtin_clzll(x) : 0;
+}
+inline constexpr int msb(unsigned long long x) {
+    return x ? sizeof(x) * 8 - __builtin_clzll(x) : 0;
+}
+
+// rounddown_pow2(x)
+//    Round x down to the nearest power of 2.
+template <typename T>
+inline constexpr T rounddown_pow2(T x) {
+    static_assert(std::is_unsigned<T>::value, "T must be unsigned");
+    return x ? T(1) << (msb(x) - 1) : 0;
+}
+
+// roundup_pow2(x)
+//    Round x up to the nearest power of 2.
+template <typename T>
+inline constexpr T roundup_pow2(T x) {
+    static_assert(std::is_unsigned<T>::value, "T must be unsigned");
+    return x ? T(1) << msb(x - 1) : 0;
+}
 
 
 // System call numbers: an application calls `int NUM` to call a system call

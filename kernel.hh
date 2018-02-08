@@ -42,6 +42,7 @@ struct __attribute__((aligned(4096))) cpustate {
     cpustate() = default;
     NO_COPY_OR_ASSIGN(cpustate);
 
+    inline bool contains(uintptr_t addr) const;
     inline bool contains(void* ptr) const;
 
     void init();
@@ -86,6 +87,7 @@ struct __attribute__((aligned(4096))) proc {
     proc() = default;
     NO_COPY_OR_ASSIGN(proc);
 
+    inline bool contains(uintptr_t addr) const;
     inline bool contains(void* ptr) const;
 
     void init_user(pid_t pid, x86_64_pagetable* pt);
@@ -98,6 +100,8 @@ struct __attribute__((aligned(4096))) proc {
     void yield();
     void yield_noreturn() __attribute__((noreturn));
     void resume() __attribute__((noreturn));
+
+    inline bool resumable() const;
 
  private:
     int load_segment(const elf_program* ph, const uint8_t* data);
@@ -245,16 +249,34 @@ inline T read_unaligned_pa(uint64_t pa) {
 }
 
 
-// hardware_init
-//    Initialize x86 hardware, including memory, interrupts, and segments.
-//    All accessible physical memory is initially mapped as readable
-//    and writable to both kernel and application code.
-void hardware_init();
+// kallocpage
+//    Allocate and return a page. Returns `nullptr` on failure.
+//    Returns a high canonical address.
+x86_64_page* kallocpage();
 
-// timer_init(rate)
-//    Set the timer interrupt to fire `rate` times a second. Disables the
-//    timer interrupt if `rate <= 0`.
-void timer_init(int rate);
+// kalloc(sz)
+//    Allocate and return a pointer to at least `sz` contiguous bytes
+//    of memory. Returns `nullptr` if `sz == 0` or on failure.
+void* kalloc(size_t sz);
+
+// kfree(ptr)
+//    Free a pointer previously returned by `kalloc`, `kallocpage`, or
+//    `kalloc_pagetable`. Does nothing if `ptr == nullptr`.
+void kfree(void* ptr);
+
+// init_kalloc
+//    Initialize stuff needed by `kalloc`. Called from `init_hardware`,
+//    after `physical_ranges` is initialized.
+void init_kalloc();
+
+// test_kalloc
+//    Run unit tests on the kalloc system.
+void test_kalloc();
+
+
+// init_hardware
+//    Initialize hardware and CPUs.
+void init_hardware();
 
 
 // kernel page table (used for virtual memory)
@@ -265,6 +287,7 @@ x86_64_pagetable* kalloc_pagetable();
 
 // change current page table
 void set_pagetable(x86_64_pagetable* pagetable);
+
 
 // turn off the virtual machine
 void poweroff() __attribute__((noreturn));
@@ -318,9 +341,6 @@ int check_keyboard();
 //    `vm_map`.
 int program_load(proc* p, int programnumber);
 
-x86_64_page* kallocpage();
-void kfree(x86_64_page*);
-
 // log_printf, log_vprintf
 //    Print debugging messages to the host's `log.txt` file. We run QEMU
 //    so that messages written to the QEMU "parallel port" end up in `log.txt`.
@@ -344,6 +364,8 @@ int error_vprintf(int cpos, int color, const char* format, va_list val)
     __attribute__((noinline));
 
 
+// this_cpu
+//    Return a pointer to the current CPU. Requires disabled interrupts.
 inline cpustate* this_cpu() {
     assert(is_cli());
     cpustate* result;
@@ -358,16 +380,34 @@ inline void adjust_this_cpu_spinlock_depth(int delta) {
                   : "er" (delta) : "cc", "memory");
 }
 
+// cpustate::contains(ptr)
+//    Return true iff `ptr` lies within this cpustate's allocation.
 inline bool cpustate::contains(void* ptr) const {
-    uintptr_t delta =
-        reinterpret_cast<uintptr_t>(ptr) - reinterpret_cast<uintptr_t>(this);
-    return delta < CPUSTACK_SIZE;
+    return contains(reinterpret_cast<uintptr_t>(ptr));
+}
+inline bool cpustate::contains(uintptr_t addr) const {
+    uintptr_t delta = addr - reinterpret_cast<uintptr_t>(this);
+    return delta <= CPUSTACK_SIZE;
 }
 
+// proc::contains(ptr)
+//    Return true iff `ptr` lies within this cpustate's allocation.
 inline bool proc::contains(void* ptr) const {
-    uintptr_t delta =
-        reinterpret_cast<uintptr_t>(ptr) - reinterpret_cast<uintptr_t>(this);
-    return delta < KTASKSTACK_SIZE;
+    return contains(reinterpret_cast<uintptr_t>(ptr));
+}
+inline bool proc::contains(uintptr_t addr) const {
+    uintptr_t delta = addr - reinterpret_cast<uintptr_t>(this);
+    return delta <= KTASKSTACK_SIZE;
+}
+
+// proc::resumable()
+//    Return true iff this `proc` can be resumed (`regs_` or `yields_`
+//    is set). Also checks some assertions about `regs_` and `yields_`.
+inline bool proc::resumable() const {
+    assert(!(regs_ && yields_));            // at most one at a time
+    assert(!regs_ || contains(regs_));      // `regs_` points within this
+    assert(!yields_ || contains(yields_));  // same for `yields_`
+    return regs_ || yields_;
 }
 
 #endif

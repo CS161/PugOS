@@ -19,7 +19,7 @@ static void process_setup(pid_t pid, const char* program_name);
 void kernel_start(const char* command) {
     assert(read_rbp() % 16 == 0);  // check stack alignment
 
-    hardware_init();
+    init_hardware();
     console_clear();
 
     // Set up process descriptors
@@ -53,8 +53,9 @@ void process_setup(pid_t pid, const char* name) {
     p->regs_->reg_rsp = MEMSIZE_VIRTUAL;
     x86_64_page* stkpg = kallocpage();
     assert(stkpg);
-    vmiter(p, p->regs_->reg_rsp - PAGESIZE).map(ka2pa(stkpg));
+    r = vmiter(p, MEMSIZE_VIRTUAL - PAGESIZE).map(ka2pa(stkpg));
     p->regs_->reg_rsp -= 8;     // align stack by 16 bytes
+    assert(r >= 0);
 
     int cpu = pid % ncpu;
     cpus[cpu].runq_lock_.lock_noirq();
@@ -201,9 +202,9 @@ void proc::exception(regstate* regs) {
             panic("Kernel page fault for %p (%s %s, rip=%p)!\n",
                   addr, operation, problem, regs->reg_rip);
         }
-        console_printf(CPOS(24, 0), 0x0C00,
-                       "Process %d page fault for %p (%s %s, rip=%p)!\n",
-                       pid_, addr, operation, problem, regs->reg_rip);
+        error_printf(CPOS(24, 0), 0x0C00,
+                     "Process %d page fault for %p (%s %s, rip=%p)!\n",
+                     pid_, addr, operation, problem, regs->reg_rip);
         this->state_ = proc::broken;
         this->yield();
         break;

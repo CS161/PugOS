@@ -7,8 +7,8 @@
 //    Grody functions for interacting with x86 hardware.
 
 
-// hardware_init
-//    Initialize hardware. Calls other functions bellow.
+// init_hardware
+//    Initialize hardware. Calls other functions below.
 
 static void init_early_memory();
 static void init_interrupts();
@@ -16,7 +16,7 @@ static void init_constructors();
 static void init_physical_ranges();
 static void init_other_processors();
 
-void hardware_init() {
+void init_hardware() {
     // initialize early-stage virtual memory structures
     init_early_memory();
 
@@ -32,6 +32,9 @@ void hardware_init() {
     // initialize the `physical_ranges` object that tracks
     // kernel and reserved physical memory
     init_physical_ranges();
+
+    // initialize kernel allocator
+    init_kalloc();
 
     // initialize this CPU
     ncpu = 1;
