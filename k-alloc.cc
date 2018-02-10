@@ -146,19 +146,23 @@ int min_larger_order(int order) {
 //    Allocate and return a pointer to at least `sz` contiguous bytes
 //    of memory. Returns `nullptr` if `sz == 0` or on failure.
 void* kalloc(size_t sz) {
-    log_printf("kalloc(%d)\n", sz);
     if (!sz) return nullptr;
 
     int order = order_of(sz) < MIN_ORDER ? MIN_ORDER : order_of(sz);
     if (order > MAX_ORDER) return nullptr;
 
+    auto irqs = page_lock.lock();
+
     // order of largest block to be broken up
     int largest_min_order = min_larger_order(order);
+    if (largest_min_order < 0) {
+        page_lock.unlock(irqs);
+        return nullptr;
+    }
 
     // break up blocks if necessary
     while (free_blocks(order)->empty()) {
         int larger_order = min_larger_order(order);
-        if (larger_order < 0) return nullptr;
 
         // block to be broken in half
         pagestate* target_block = free_blocks(larger_order)->pop_front();
@@ -180,6 +184,7 @@ void* kalloc(size_t sz) {
 
     pagestate* free_block = free_blocks(order)->pop_front();
     free_block->allocated = true;
+    page_lock.unlock(irqs);
     return pa2ka<void*>(free_block->pindex * PAGESIZE);
 }
 
