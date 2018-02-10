@@ -26,17 +26,20 @@ struct Block {
         : pindex_(pindex) {
     }
 };
-static list<Block, &Block::link_> _order_lists[MAX_ORDER - MIN_ORDER + 1];
+static list<Block, &Block::link_> _free_block_lists[MAX_ORDER - MIN_ORDER + 1];
 
 // #define free_blocks(order)              \
 //     assert(order >= MIN_ORDER);         \
 //     assert(order <= MAX_ORDER);         \
-//     _order_lists[order - MIN_ORDER]
+//     _free_block_lists[order - MIN_ORDER]
 
+
+// free_blocks(order)
+//    Returns a pointer to the linked list containing free blocks of size order
 list<Block, &Block::link_>* free_blocks(int order) {
     assert(order >= MIN_ORDER);
     assert(order <= MAX_ORDER);
-    return &_order_lists[order - MIN_ORDER];
+    return &_free_block_lists[order - MIN_ORDER];
 }
 
 x86_64_page* kallocpage() {
@@ -65,8 +68,9 @@ x86_64_page* kallocpage() {
 
 
 // find_max_order(addr)
-//    Determine the largest order this address is aligned by which fits in the interval. Used in
-//    init_kalloc
+//    Determine the largest order buddy-allocator block creatable at this
+//    address, considering available free space and alignment. Used in
+//    init_kalloc.
 int find_max_order(uintptr_t start, uintptr_t end) {
     for (auto order = MAX_ORDER; order >= MIN_ORDER; order--) {
         if (start % (1 << order) == 0 && start + (1 << order) <= end) {
@@ -81,10 +85,10 @@ int find_max_order(uintptr_t start, uintptr_t end) {
 //    Initialize stuff needed by `kalloc`. Called from `init_hardware`,
 //    after `physical_ranges` is initialized.
 void init_kalloc() {
-    //memset(pages, 0, sizeof(pages));
+    memset(pages, 0, sizeof(pages));
 
     for (auto range = physical_ranges.begin();
-     range != physical_ranges.end();
+     range->first() < MEMSIZE_PHYSICAL;
      ++range) {
 
         auto addr = range->first();
@@ -137,12 +141,12 @@ void test_kalloc() {
     assert(find_max_order(0x0, 0x1000) == 12);
 
     // pages array invariants
-    // uintptr_t addr = 0;
-    // while (addr < MEMSIZE_PHYSICAL) {
-    //     auto page = &pages[addr / PAGESIZE];
-    //     assert(page->order >= MIN_ORDER);
-    //     assert(page->order <= MAX_ORDER);
-    //     assert(addr % (1 << page->order) == 0); // buddy allocator alignment
-    //     addr += (1 << page->order);
-    // }
+    uintptr_t addr = 0;
+    while (addr < MEMSIZE_PHYSICAL) {
+        auto page = &pages[addr / PAGESIZE];
+        assert(page->order >= MIN_ORDER);
+        assert(page->order <= MAX_ORDER);
+        assert(addr % (1 << page->order) == 0); // buddy allocator alignment
+        addr += (1 << page->order);
+    }
 }
