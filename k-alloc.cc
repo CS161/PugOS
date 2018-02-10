@@ -136,6 +136,7 @@ int min_larger_order(int order) {
     int test_order = order;
     while (free_blocks(test_order)->empty()) {
         ++test_order;
+        if (test_order > MAX_ORDER) return -1;
     }
     assert(test_order <= MAX_ORDER);
     return test_order;
@@ -157,6 +158,7 @@ void* kalloc(size_t sz) {
     // break up blocks if necessary
     while (free_blocks(order)->empty()) {
         int larger_order = min_larger_order(order);
+        if (larger_order < 0) return nullptr;
 
         // block to be broken in half
         pagestate* target_block = free_blocks(larger_order)->pop_front();
