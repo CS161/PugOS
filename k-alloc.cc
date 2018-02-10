@@ -27,8 +27,8 @@ static list<pagestate, &pagestate::link_> _free_block_lists[NORDERS];
 // free_blocks(order)
 //    Returns a pointer to the linked list containing free blocks of size order
 list<pagestate, &pagestate::link_>* free_blocks(int order) {
-    assert(order >= MIN_ORDER);
     assert(order <= MAX_ORDER);
+    assert(order >= MIN_ORDER);
     return &_free_block_lists[order - MIN_ORDER];
 }
 
