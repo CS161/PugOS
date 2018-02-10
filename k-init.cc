@@ -35,6 +35,7 @@ void init_hardware() {
 
     // initialize kernel allocator
     init_kalloc();
+    test_kalloc();
 
     // initialize this CPU
     ncpu = 1;
