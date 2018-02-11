@@ -57,6 +57,9 @@ void process_setup(pid_t pid, const char* name) {
     p->regs_->reg_rsp -= 8;     // align stack by 16 bytes
     assert(r >= 0);
 
+    r = vmiter(p, ktext2pa(console)).map(ktext2pa(console), PTE_P|PTE_W|PTE_U);
+    assert(r >= 0);
+
     int cpu = pid % ncpu;
     cpus[cpu].runq_lock_.lock_noirq();
     cpus[cpu].enqueue(p);
@@ -91,7 +94,8 @@ pid_t process_fork(proc* ogproc, regstate* ogregs) {
     // 3. Copy the parent process’s user-accessible memory and map the copies
     // into the new process’s page table.
     for (vmiter source(ogproc); source.low(); source.next()) {
-        if (source.user() && source.writable()) {
+        if (source.user() && source.writable()
+                && source.pa() != ktext2pa(console)) {
             uintptr_t npage = ka2pa(kallocpage());
             if (!npage) return -1;
             memcpy(reinterpret_cast<void*>(pa2ka(npage)),

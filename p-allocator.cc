@@ -19,7 +19,6 @@ void process_main(void) {
     srand(p);
 
     // Console testing
-    sys_map_console(console);
     bool test_console = false;
     if (test_console) {
         for (int i = 0; i < CONSOLE_ROWS * CONSOLE_COLUMNS; ++i) {
