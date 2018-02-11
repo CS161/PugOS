@@ -81,11 +81,18 @@ pid_t process_fork(proc* ogproc, regstate* ogregs) {
         }
     }
     // No free process slot found
-    if (fpid < 1) return -1;
+    if (fpid < 1) {
+        ptable_lock.unlock(irqs);
+        return -1;
+    }
 
     // 2. Allocate a struct proc and a page table.
     // 5. Store the new process in the process table.
     proc* fproc = ptable[fpid] = reinterpret_cast<proc*>(kallocpage());
+    if (!fproc) {
+        ptable_lock.unlock(irqs);
+        return -1;
+    }
     fproc->state_ = proc::broken;
     ptable_lock.unlock(irqs);
     x86_64_pagetable* fpt = kalloc_pagetable();
