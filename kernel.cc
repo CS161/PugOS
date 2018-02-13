@@ -67,9 +67,33 @@ void process_setup(pid_t pid, const char* name) {
 }
 
 
+static void process_exit(proc* p) {
+    log_printf("process_exit on pid %d\n", p->pid_);
+    auto irqs = ptable_lock.lock();
+    p->state_ = proc::broken;
+    ptable_lock.unlock(irqs);
+
+    // free process' writable virtual memory, except for the stack page and
+    // console
+    for (vmiter it(p); it.va() < MEMSIZE_VIRTUAL - PAGESIZE; it.next()) {
+        if (it.user() && it.writable() && it.pa() != ktext2pa(console)) {
+            // log_printf("%d virtual mem: freeing va %p\n", p->pid_, it.va());
+            kfree(reinterpret_cast<void*>(pa2ka(it.pa())));
+        }
+        // else if (it.user()) {
+            // if (vmiter(fpt, it.va()).map(it.pa(), it.perm()) < 0) {
+            //     return -1;
+            // }
+        // }
+    }
+}
+
+
 // process_fork(ogproc, ogregs)
 //    Fork the process ogproc into the first available pid.
-pid_t process_fork(proc* ogproc, regstate* ogregs) {
+static pid_t process_fork(proc* ogproc, regstate* ogregs) {
+    debug_printf("forking process %d\n", ogproc->pid_);
+
     // 1. Allocate a new PID.
     pid_t fpid = -1;
 
@@ -93,26 +117,43 @@ pid_t process_fork(proc* ogproc, regstate* ogregs) {
         ptable_lock.unlock(irqs);
         return -1;
     }
+    fproc->pid_ = fpid;
     fproc->state_ = proc::broken;
     ptable_lock.unlock(irqs);
-    x86_64_pagetable* fpt = kalloc_pagetable();
-    if (!fproc || !fpt) return -1;
+
+
+    x86_64_pagetable* fpt = fproc->pagetable_ = kalloc_pagetable();
+    if (!fpt) {
+        kfree(fproc);
+        irqs = ptable_lock.lock();
+        ptable[fpid] = nullptr;
+        ptable_lock.unlock(irqs);
+        return -1;
+    }
 
     // 3. Copy the parent process’s user-accessible memory and map the copies
     // into the new process’s page table.
     for (vmiter source(ogproc); source.low(); source.next()) {
         if (source.user() && source.writable()
                 && source.pa() != ktext2pa(console)) {
-            uintptr_t npage = ka2pa(kallocpage());
-            if (!npage) return -1;
-            memcpy(reinterpret_cast<void*>(pa2ka(npage)),
-                   reinterpret_cast<void*>(pa2ka(source.pa())), PAGESIZE);
-            if (vmiter(fpt, source.va()).map(npage, source.perm()) < 0) {
+            void* npage_ka = kallocpage();
+            if (npage_ka == nullptr) {
+                process_exit(fproc);
+                return -1;
+            }
+            uintptr_t npage_pa = ka2pa(npage_ka);
+
+            memcpy(npage_ka, reinterpret_cast<void*>(pa2ka(source.pa())),
+                PAGESIZE);
+            if (vmiter(fpt, source.va()).map(npage_pa, source.perm()) < 0) {
+                kfree(npage_ka);
+                process_exit(fproc);
                 return -1;
             }
         }
         else if (source.user()) {
             if (vmiter(fpt, source.va()).map(source.pa(), source.perm()) < 0) {
+                process_exit(fproc);
                 return -1;
             }
         }
@@ -134,6 +175,7 @@ pid_t process_fork(proc* ogproc, regstate* ogregs) {
     // 7. Arrange for the new PID to be returned to the parent process and 0 to
     // be returned to the child process.
     fproc->regs_->reg_rax = 0;
+    debug_printf("finished forking\n");
     return fpid;
 }
 
@@ -144,7 +186,7 @@ int canary_value = rand();
 //    at the canary values. If the stack got too big and overwrote data, we will
 //    know because the saved canary values will have changed.
 
-void check_corruption(proc* p) {
+static void check_corruption(proc* p) {
     cpustate* c = &cpus[p->pid_ % ncpu];
     assert(p->canary_ == canary_value);
     assert(c->canary_ == canary_value);
@@ -287,6 +329,11 @@ uintptr_t proc::syscall(regstate* regs) {
         break;
     }
 
+    case SYSCALL_EXIT: {
+        process_exit(this);
+        this->yield_noreturn();
+    }
+
     case SYSCALL_MAP_CONSOLE: {
         uintptr_t addr = regs->reg_rdi;
         if (addr > VA_LOWMAX || addr & 0xFFF) {
@@ -294,6 +341,15 @@ uintptr_t proc::syscall(regstate* regs) {
         }
         if (vmiter(this, addr).map(ktext2pa(console), PTE_P|PTE_W|PTE_U) < 0) {
             break;
+        }
+        r = 0;
+        break;
+    }
+
+    case SYSCALL_MSLEEP: {
+        unsigned long end = ticks + (regs->reg_rdi + 9) / 10;
+        while ((long) (end - ticks) > 0) {
+            this->yield();
         }
         r = 0;
         break;

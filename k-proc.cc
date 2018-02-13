@@ -2,8 +2,8 @@
 #include "kernel.hh"
 #include "k-vmiter.hh"
 
-proc* ptable[NPROC];            // array of process descriptor pointers
-spinlock ptable_lock;           // protects `ptable`
+proc* ptable[NPROC];                    // array of process descriptor pointers
+spinlock ptable_lock;                   // protects `ptable`
 
 
 // proc::init_user(pid, pt)
@@ -39,9 +39,6 @@ void proc::init_user(pid_t pid, x86_64_pagetable* pt) {
     state_ = proc::runnable;
 
     pagetable_ = pt;
-
-    runq_pprev_ = nullptr;
-    runq_next_ = nullptr;
 }
 
 
@@ -71,9 +68,6 @@ void proc::init_kernel(pid_t pid, void (*f)(proc*)) {
     state_ = proc::runnable;
 
     pagetable_ = early_pagetable;
-
-    runq_pprev_ = nullptr;
-    runq_next_ = nullptr;
 }
 
 

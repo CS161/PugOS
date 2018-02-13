@@ -2,6 +2,7 @@
 #define CHICKADEE_KERNEL_H
 #include "x86-64.h"
 #include "lib.hh"
+#include "k-list.hh"
 #include "k-lock.hh"
 #include "k-memrange.hh"
 #if CHICKADEE_PROCESS
@@ -16,6 +17,56 @@ struct yieldstate;
 //
 //    Functions, constants, and definitions for the kernel.
 
+#define DEBUG false
+
+
+// Process descriptor type
+struct __attribute__((aligned(4096))) proc {
+    // These three members must come first:
+    pid_t pid_;                        // process ID
+    regstate* regs_;                   // process's current registers
+    yieldstate* yields_;               // process's current yield state
+
+    list_links runq_link_;             // for cpu run queue
+
+    enum state_t {
+        blank = 0, runnable, blocked, broken
+    };
+    state_t state_;                    // process state
+    x86_64_pagetable* pagetable_;      // process's page table
+
+    int canary_;
+
+    proc() = default;
+    NO_COPY_OR_ASSIGN(proc);
+
+    inline bool contains(uintptr_t addr) const;
+    inline bool contains(void* ptr) const;
+
+    void init_user(pid_t pid, x86_64_pagetable* pt);
+    void init_kernel(pid_t pid, void (*f)(proc*));
+    int load(const char* binary_name);
+
+    void exception(regstate* reg);
+    uintptr_t syscall(regstate* reg);
+
+    void yield();
+    void yield_noreturn() __attribute__((noreturn));
+    void resume() __attribute__((noreturn));
+
+    inline bool resumable() const;
+
+ private:
+    int load_segment(const elf_program* ph, const uint8_t* data);
+};
+
+#define NPROC 16
+extern proc* ptable[NPROC];
+extern spinlock ptable_lock;
+#define KTASKSTACK_SIZE  4096
+
+extern int canary_value;
+
 
 // CPU state type
 struct __attribute__((aligned(4096))) cpustate {
@@ -27,8 +78,7 @@ struct __attribute__((aligned(4096))) cpustate {
     int index_;
     int lapic_id_;
 
-    proc* runq_head_;
-    proc* runq_tail_;
+    list<proc, &proc::runq_link_> runq_;
     spinlock runq_lock_;
     proc* idle_task_;
 
@@ -64,55 +114,6 @@ extern int ncpu;
 #define CPUSTACK_SIZE 4096
 
 inline cpustate* this_cpu();
-
-
-// Process descriptor type
-struct __attribute__((aligned(4096))) proc {
-    // These three members must come first:
-    pid_t pid_;                        // process ID
-    regstate* regs_;                   // process's current registers
-    yieldstate* yields_;               // process's current yield state
-
-    enum state_t {
-        blank = 0, runnable, blocked, broken
-    };
-    state_t state_;                    // process state
-    x86_64_pagetable* pagetable_;      // process's page table
-
-    proc** runq_pprev_;
-    proc* runq_next_;
-
-    int canary_;
-
-    proc() = default;
-    NO_COPY_OR_ASSIGN(proc);
-
-    inline bool contains(uintptr_t addr) const;
-    inline bool contains(void* ptr) const;
-
-    void init_user(pid_t pid, x86_64_pagetable* pt);
-    void init_kernel(pid_t pid, void (*f)(proc*));
-    int load(const char* binary_name);
-
-    void exception(regstate* reg);
-    uintptr_t syscall(regstate* reg);
-
-    void yield();
-    void yield_noreturn() __attribute__((noreturn));
-    void resume() __attribute__((noreturn));
-
-    inline bool resumable() const;
-
- private:
-    int load_segment(const elf_program* ph, const uint8_t* data);
-};
-
-#define NPROC 16
-extern proc* ptable[NPROC];
-extern spinlock ptable_lock;
-#define KTASKSTACK_SIZE  4096
-
-extern int canary_value;
 
 
 // yieldstate: callee-saved registers that must be preserved across
@@ -346,6 +347,8 @@ int program_load(proc* p, int programnumber);
 //    so that messages written to the QEMU "parallel port" end up in `log.txt`.
 void log_printf(const char* format, ...) __attribute__((noinline));
 void log_vprintf(const char* format, va_list val) __attribute__((noinline));
+void debug_printf(int level, const char* format, ...) __attribute__((noinline));
+void debug_printf(const char* format, ...) __attribute__((noinline));
 
 
 // log_backtrace

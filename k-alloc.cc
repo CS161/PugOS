@@ -6,10 +6,10 @@ static spinlock page_lock;
 static uintptr_t next_free_pa;
 
 // allocator constants
-static const int NPAGES = MEMSIZE_PHYSICAL / PAGESIZE;
-static const int MIN_ORDER = 12;
-static const int MAX_ORDER = 21;
-static const int NORDERS = MAX_ORDER - MIN_ORDER + 1;
+#define NPAGES (MEMSIZE_PHYSICAL / PAGESIZE)
+#define MIN_ORDER 12
+#define MAX_ORDER 21
+#define NORDERS (MAX_ORDER - MIN_ORDER + 1)
 
 // physical page array
 struct pagestate {
@@ -85,10 +85,21 @@ static int find_max_order(uintptr_t start, uintptr_t end) {
 }
 
 
-// debug function
-static void print_block_list(list<pagestate, &pagestate::link_>* lst) {
+// print_block_list
+//    logs the contents of a list of blocks in free_blocks
+static void print_block_list(int order) {
+    list<pagestate, &pagestate::link_>* lst = free_blocks(order);
     for (pagestate* b = lst->front(); b; b = lst->next(b)) {
         log_printf("%d ", b->pindex);
+    }
+    log_printf("\n");
+}
+
+
+void print_all_block_lists() {
+    for (int i = MIN_ORDER; i <= MAX_ORDER; i++) {
+        log_printf("\tBlock list of order %d: ", i);
+        print_block_list(i);
     }
     log_printf("\n");
 }
@@ -142,21 +153,28 @@ static int min_larger_order(int order) {
     return test_order;
 }
 
+
 // kalloc(sz)
 //    Allocate and return a pointer to at least `sz` contiguous bytes
 //    of memory. Returns `nullptr` if `sz == 0` or on failure.
 void* kalloc(size_t sz) {
     if (!sz) return nullptr;
+    sz = MAX(sz, 1U << MIN_ORDER);
 
     int order = order_of(sz) < MIN_ORDER ? MIN_ORDER : order_of(sz);
-    if (order > MAX_ORDER) return nullptr;
+    if (order > MAX_ORDER) {
+        debug_printf("Order %d too big, returning nullptr\n", order);
+        return nullptr;
+    }
 
     auto irqs = page_lock.lock();
 
     // order of largest block to be broken up
     int largest_min_order = min_larger_order(order);
-    if (largest_min_order < 0) {
+    if (largest_min_order < 0 || largest_min_order > MAX_ORDER) {
         page_lock.unlock(irqs);
+        debug_printf("kalloc(%d): largest_min_order %d invalid, returning "
+            "nullptr\n", sz, largest_min_order);
         return nullptr;
     }
 
@@ -207,6 +225,7 @@ static int buddy_pindex(int p, int order) {
 //    `kalloc_pagetable`. Does nothing if `ptr == nullptr`.
 void kfree(void* ptr) {
     if (ptr == nullptr) return;
+
     assert(ka2pa(ptr) % PAGESIZE == 0);
 
     auto irqs = page_lock.lock();
@@ -216,6 +235,9 @@ void kfree(void* ptr) {
     // free the memory
     pages[pindex].allocated = false;
     memset(ptr, 0, (1 << pages[pindex].order));
+
+    // log_printf("BEFORE FREE pindex=%d:\n", pindex);
+    // print_all_block_lists();
 
     while (true) {
         // find buddy address
@@ -232,7 +254,7 @@ void kfree(void* ptr) {
         auto merge_base = MIN(pindex, b_pindex);
 
         // wipe merged block from existence and coalesce
-        free_blocks(pages[to_merge].order)->erase(&pages[to_merge]);
+        free_blocks(pages[b_pindex].order)->erase(&pages[b_pindex]);
         memset(&pages[to_merge], 0, sizeof(pagestate));
         pages[merge_base].order++;
 
@@ -240,8 +262,12 @@ void kfree(void* ptr) {
     }
 
     free_blocks(pages[pindex].order)->push_back(&pages[pindex]);
+
+    // log_printf("AFTER FREE:\n");
+    // print_all_block_lists();
     page_lock.unlock(irqs);
 }
+
 
 // check_pages_invariants
 //    Run through the pages array and check for broken invariants
@@ -261,6 +287,7 @@ static void check_pages_invariants() {
 // test_kalloc
 //    Run unit tests on the kalloc system.
 void test_kalloc() {
+    log_printf("\n\ntesting kalloc, probably bootup\n");
     // helper functions
     assert(find_max_order(7, 10) == -1);
     assert(find_max_order(0x1000, 0x10000) == 12);

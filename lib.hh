@@ -118,6 +118,7 @@ inline constexpr T roundup_pow2(T x) {
 #define SYSCALL_FORK            6
 #define SYSCALL_EXIT            7
 #define SYSCALL_MAP_CONSOLE     8
+#define SYSCALL_MSLEEP          9
 #define SYSCALL_COMMIT_SEPPUKU  44
 
 

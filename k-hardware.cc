@@ -248,6 +248,8 @@ int keyboard_readc() {
 //    Print debugging messages to the host's `log.txt` file. We run QEMU
 //    so that messages written to the QEMU "parallel port" end up in `log.txt`.
 
+static spinlock print_lock;         // forces atomic printing
+
 #define IO_PARALLEL1_DATA       0x378
 #define IO_PARALLEL1_STATUS     0x379
 # define IO_PARALLEL_STATUS_BUSY        0x80
@@ -284,9 +286,12 @@ static void parallel_port_putc(printer* p, unsigned char c, int color) {
 }
 
 void log_vprintf(const char* format, va_list val) {
+    irqstate irqs;
+    if (NCPU > 1) irqs = print_lock.lock();
     printer p;
     p.putc = parallel_port_putc;
     printer_vprintf(&p, 0, format, val);
+    if (NCPU > 1) print_lock.unlock(irqs);
 }
 
 void log_printf(const char* format, ...) {
@@ -294,6 +299,24 @@ void log_printf(const char* format, ...) {
     va_start(val, format);
     log_vprintf(format, val);
     va_end(val);
+}
+
+void debug_printf(int level, const char* format, ...) {
+    (void) level;
+    if (DEBUG) {
+        va_list val;
+        va_start(val, format);
+        log_vprintf(format, val);
+        va_end(val);
+    }
+}
+void debug_printf(const char* format, ...) {
+    if (DEBUG) {
+        va_list val;
+        va_start(val, format);
+        log_vprintf(format, val);
+        va_end(val);
+    }
 }
 
 

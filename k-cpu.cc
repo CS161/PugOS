@@ -1,4 +1,5 @@
 #include "kernel.hh"
+#include "k-vmiter.hh"
 
 cpustate cpus[NCPU];
 int ncpu;
@@ -25,8 +26,6 @@ void cpustate::init() {
     self_ = this;
     current_ = nullptr;
     index_ = this - cpus;
-    runq_head_ = nullptr;
-    runq_tail_ = nullptr;
     runq_lock_.clear();
     idle_task_ = nullptr;
     spinlock_depth_ = 0;
@@ -38,6 +37,57 @@ void cpustate::init() {
 }
 
 
+// cpustate::annihilate(p)
+//    Destroy p and scatter its ashes to the corners of the world
+static int ka2p(void* addr) {
+    return (int) (ka2pa(reinterpret_cast<uintptr_t>(addr)) / PAGESIZE);
+}
+
+#define debug_print(p, ptr)                                \
+    if (ptr != nullptr) {                               \
+        log_printf("Freeing pid %d's '"#ptr"' va %p ", p->pid_, ptr);       \
+        log_printf("pindex %d pa %p\n", ka2p(ptr), ka2pa(ptr));           \
+    } else {                                            \
+        log_printf("Not freeing "#ptr", is null\n");    \
+    }
+
+void annihilate(proc* p) {
+    log_printf("cpustate::annihilate pid %d\n", p->pid_);
+    // free stack page
+    vmiter it(p, MEMSIZE_VIRTUAL - PAGESIZE);
+    log_printf("\tstack page: pa=%p ka=%p\n", it.pa(), it.ka());
+    if (it.pa() != 0xffff'ffff'ffff'ffff) {
+        kfree(reinterpret_cast<void*>(pa2ka(it.pa())));
+    }
+
+    // free misc proc struct stuff
+    log_printf("\tfreeing regs_ and yields_\n");
+    kfree(p->regs_);
+    kfree(p->yields_);
+
+    // free pagetables
+    log_printf("\tfreeing l3-1 pagetables:\n");
+    for (ptiter ptit(p->pagetable_, 0); ptit.low(); ptit.next()) {
+        log_printf("\t\tpa=%p\n", ptit.ptp_pa());
+        kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
+    }
+    log_printf("\tfreeing l4 pagetable pa=%p ka=%p\n",
+        ka2pa(p->pagetable_), p->pagetable_);
+    kfree(p->pagetable_);
+
+    auto pid = p->pid_;
+    log_printf("\tfreeing process struct pa=%p ka=%p\n", ka2pa(p), p);
+    kfree(p);
+
+    // wipe process from ptable array
+    auto irqs = ptable_lock.lock();
+    ptable[pid] = nullptr;
+    ptable_lock.unlock(irqs);
+
+    log_printf("\tcompleted\n", pid);
+}
+
+
 // cpustate::enqueue(p)
 //    Enqueue `p` on this CPU's run queue. `p` must not be on any
 //    run queue, it must be resumable, and `this->runq_lock_` must
@@ -45,10 +95,21 @@ void cpustate::init() {
 
 void cpustate::enqueue(proc* p) {
     assert(p->resumable());
-    assert(!p->runq_pprev_);
-    p->runq_pprev_ = runq_head_ ? &runq_tail_->runq_next_ : &runq_head_;
-    p->runq_next_ = nullptr;
-    *p->runq_pprev_ = runq_tail_ = p;
+    runq_.push_back(p);
+}
+
+
+static void print_runq(cpustate* c) {
+    debug_printf("CPU %d runq pids: ", c->lapic_id_);
+    if (c->runq_.empty()) {
+        debug_printf("nothing in queue");
+    }
+    else {
+        for (proc* p = c->runq_.front(); p; p = c->runq_.next(p)) {
+            debug_printf("%d ", p->pid_);
+        }
+    }
+    debug_printf("\n");
 }
 
 
@@ -69,6 +130,15 @@ void cpustate::schedule(proc* yielding_from) {
     }
 
     while (1) {
+        // if (current_) {
+        //     debug_printf(1, "cpu::schedule checking process pid %d\n",
+        //         current_->pid_);
+        // }
+        // else {
+        //     debug_printf(1, "cpu::schedule checking null process\n");
+        // }
+        // print_runq(this);
+
         // try to run `current`
         if (current_
             && current_->state_ == proc::runnable
@@ -84,21 +154,21 @@ void cpustate::schedule(proc* yielding_from) {
             if (current_->state_ == proc::runnable) {
                 enqueue(current_);
             }
-            current_ = yielding_from = nullptr;
+
             // switch to a safe page table
             lcr3(ktext2pa(early_pagetable));
-        }
-        if (runq_head_) {
-            // pop head of run queue into `current_`
-            current_ = runq_head_;
-            runq_head_ = runq_head_->runq_next_;
-            if (runq_head_) {
-                runq_head_->runq_pprev_ = &runq_head_;
-            } else {
-                runq_tail_ = nullptr;
+            
+            // if `current` is broken, clean it up
+            if (current_->state_ == proc::broken) {
+                annihilate(current_);
             }
-            current_->runq_next_ = nullptr;
-            current_->runq_pprev_ = nullptr;
+        
+            current_ = yielding_from = nullptr;
+        }
+
+        if (!runq_.empty()) {
+            // pop head of run queue into `current_`
+            current_ = runq_.pop_front();
         }
         runq_lock_.unlock_noirq();
 
