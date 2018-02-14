@@ -70,32 +70,30 @@ void process_setup(pid_t pid, const char* name) {
 
 
 static void process_exit(proc* p) {
-    log_printf("process_exit on pid %d\n", p->pid_);
+    // log_printf("process_exit on pid %d\n", p->pid_);
     auto irqs = ptable_lock.lock();
     p->state_ = proc::broken;
     ptable_lock.unlock(irqs);
 
     // free process' writable virtual memory, except for the stack page and
     // console
-    for (vmiter it(p); it.va() < MEMSIZE_VIRTUAL - PAGESIZE; it.next()) {
-        if (it.user() && it.writable() && it.pa() != ktext2pa(console)) {
-            // log_printf("%d virtual mem: freeing va %p\n", p->pid_, it.va());
-            kfree(reinterpret_cast<void*>(pa2ka(it.pa())));
-        }
+    // for (vmiter it(p); it.va() < MEMSIZE_VIRTUAL - PAGESIZE; it.next()) {
+    //     if (it.user() && it.writable() && it.pa() != ktext2pa(console)) {
+    //         // log_printf("%d virtual mem: freeing va %p\n", p->pid_, it.va());
+    //         kfree(reinterpret_cast<void*>(pa2ka(it.pa())));
+    //     }
         // else if (it.user()) {
             // if (vmiter(fpt, it.va()).map(it.pa(), it.perm()) < 0) {
             //     return -1;
             // }
         // }
-    }
+    //}
 }
 
 
 // process_fork(ogproc, ogregs)
 //    Fork the process ogproc into the first available pid.
 static pid_t process_fork(proc* ogproc, regstate* ogregs) {
-    debug_printf("forking process %d\n", ogproc->pid_);
-
     // 1. Allocate a new PID.
     pid_t fpid = -1;
 
@@ -177,7 +175,6 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
     // 7. Arrange for the new PID to be returned to the parent process and 0 to
     // be returned to the child process.
     fproc->regs_->reg_rax = 0;
-    debug_printf("finished forking\n");
     return fpid;
 }
 

@@ -3,7 +3,6 @@
 #include "k-lock.hh"
 
 static spinlock page_lock;
-static uintptr_t next_free_pa;
 
 // allocator constants
 #define NPAGES (MEMSIZE_PHYSICAL / PAGESIZE)
@@ -230,6 +229,9 @@ void kfree(void* ptr) {
 
     auto irqs = page_lock.lock();
     int pindex = ka2pa(ptr) / PAGESIZE;
+    if (!pages[pindex].allocated) {
+        debug_printf("bad free: %p\n", ptr);
+    }
     assert(pages[pindex].allocated);
 
     // free the memory

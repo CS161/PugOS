@@ -52,31 +52,38 @@ static int ka2p(void* addr) {
     }
 
 void annihilate(proc* p) {
-    log_printf("cpustate::annihilate pid %d\n", p->pid_);
+    // log_printf("cpustate::annihilate pid %d\n", p->pid_);
     // free stack page
-    vmiter it(p, MEMSIZE_VIRTUAL - PAGESIZE);
-    log_printf("\tstack page: pa=%p ka=%p\n", it.pa(), it.ka());
-    if (it.pa() != 0xffff'ffff'ffff'ffff) {
-        kfree(reinterpret_cast<void*>(pa2ka(it.pa())));
+    // vmiter it(p, MEMSIZE_VIRTUAL - PAGESIZE);
+    // log_printf("\tstack page: pa=%p ka=%p\n", it.pa(), it.ka());
+    // if (it.pa() != 0xffff'ffff'ffff'ffff) {
+    //     kfree(reinterpret_cast<void*>(pa2ka(it.pa())));
+    // }
+
+    for (vmiter vmit(p); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
+        if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
+            // log_printf("%d virtual mem: freeing va %p\n", p->pid_, it.va());
+            kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
+        }
     }
 
     // free misc proc struct stuff
-    log_printf("\tfreeing regs_ and yields_\n");
+    // log_printf("\tfreeing regs_ and yields_\n");
     kfree(p->regs_);
     kfree(p->yields_);
 
     // free pagetables
-    log_printf("\tfreeing l3-1 pagetables:\n");
+    // log_printf("\tfreeing l3-1 pagetables:\n");
     for (ptiter ptit(p->pagetable_, 0); ptit.low(); ptit.next()) {
-        log_printf("\t\tpa=%p\n", ptit.ptp_pa());
+        // log_printf("\t\tpa=%p\n", ptit.ptp_pa());
         kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
     }
-    log_printf("\tfreeing l4 pagetable pa=%p ka=%p\n",
-        ka2pa(p->pagetable_), p->pagetable_);
+    // log_printf("\tfreeing l4 pagetable pa=%p ka=%p\n",
+        // ka2pa(p->pagetable_), p->pagetable_);
     kfree(p->pagetable_);
 
     auto pid = p->pid_;
-    log_printf("\tfreeing process struct pa=%p ka=%p\n", ka2pa(p), p);
+    // log_printf("\tfreeing process struct pa=%p ka=%p\n", ka2pa(p), p);
     kfree(p);
 
     // wipe process from ptable array
@@ -84,7 +91,7 @@ void annihilate(proc* p) {
     ptable[pid] = nullptr;
     ptable_lock.unlock(irqs);
 
-    log_printf("\tcompleted\n", pid);
+    // log_printf("\tcompleted\n", pid);
 }
 
 
