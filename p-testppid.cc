@@ -1,0 +1,94 @@
+#include "p-lib.hh"
+
+void process_main() {
+    sys_kdisplay(KDISPLAY_NONE);
+
+    assert(sys_getppid() == 1);
+    pid_t original = sys_getpid();
+
+    // Fork two children
+    pid_t fork1 = sys_fork();
+    pid_t after1 = sys_getpid();
+    pid_t after1_parent = sys_getppid();
+    pid_t fork2 = sys_fork();
+    pid_t after2 = sys_getpid();
+
+    // Check their parents
+    if (fork1 == 0 && fork2 == 0) {
+        assert(original != after1);
+        assert(original == after1_parent);
+        assert(after1 != after2);
+        assert(sys_getppid() == after1);
+    } else if (fork1 == 0) {
+        assert(original != after1);
+        assert(original == after1_parent);
+        assert(after1 == after2);
+        assert(sys_getppid() == original);
+    } else if (fork2 == 0) {
+        assert(original == after1);
+        assert(1 == after1_parent);
+        assert(after1 != after2);
+        assert(sys_getppid() == original);
+    } else {
+        assert(original == after1);
+        assert(1 == after1_parent);
+        assert(after1 == after2);
+        assert(sys_getppid() == 1);
+    }
+
+    if (sys_getpid() != original) {
+        sys_exit(0);
+    }
+
+    // Original process: Delay so others can run tests
+    sys_msleep(50);
+    console_printf("ppid tests without exit succeed\n");
+
+    // Tests that implicate `exit` behavior
+    assert(original != 1);
+    fork1 = sys_fork();
+
+    if (fork1 == 0) {
+        after1 = sys_getpid();
+        after1_parent = sys_getppid();
+        fork2 = sys_fork();
+    } else {
+        fork2 = -1;
+    }
+
+    pid_t after2_parent, fork3, after3;
+    if (fork2 == 0) {
+        after2 = sys_getpid();
+        after2_parent = sys_getppid();
+        fork3 = sys_fork();
+    } else {
+        fork3 = -1;
+    }
+    after3 = sys_getpid();
+
+    if (fork3 == 0) {
+        assert(original != after1);
+        assert(after1_parent == original);
+        assert(after2_parent == after1);
+        assert(sys_getppid() == after2);
+        sys_msleep(100);
+        assert(sys_getppid() == after2);
+        sys_msleep(100);
+        assert(sys_getppid() == 1);
+        sys_exit(0);
+    } else if (fork2 == 0) {
+        assert(original != after1);
+        assert(sys_getppid() == after1);
+        sys_msleep(100);
+        assert(sys_getppid() == 1);
+        sys_msleep(50);
+        sys_exit(0);
+    } else if (fork1 == 0) {
+        sys_msleep(50);
+        sys_exit(0);
+    }
+
+    sys_msleep(300);
+    console_printf("ppid tests with exit succeed\n");
+    sys_exit(0);
+}

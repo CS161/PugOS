@@ -120,6 +120,26 @@ inline constexpr T roundup_pow2(T x) {
 #define SYSCALL_MAP_CONSOLE     8
 #define SYSCALL_MSLEEP          9
 #define SYSCALL_COMMIT_SEPPUKU  44
+#define SYSCALL_KDISPLAY        100
+
+
+// System call error return values
+
+#define E_AGAIN         -11        // Try again
+#define E_CHILD         -10        // No child processes
+#define E_INTR          -4         // Interrupted system call
+#define E_INVAL         -22        // Invalid argument
+#define E_NOMEM         -12        // Out of memory
+#define E_NOSYS         -38        // Invalid system call number
+#define E_PERM          -1         // Operation not permitted
+#define E_SRCH          -3         // No such process
+
+
+// System call constants
+
+// sys_kdisplay() types
+#define KDISPLAY_NONE           0
+#define KDISPLAY_MEMVIEWER      1
 
 
 // Console printing
@@ -181,5 +201,4 @@ struct printer {
 
 void printer_vprintf(printer* p, int color, const char* format, va_list val);
 
-#define __section(x) __attribute__((section(x)))
 #endif /* !CHICKADEE_LIB_H */

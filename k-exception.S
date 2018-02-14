@@ -40,7 +40,7 @@ kernel_entry:
 //    This code creates an exception handler for all 256 possible
 //    exceptions, and initializes a table in the
 //    `.interrupt_descriptors` section containing those handlers.
-//    The `hardware_init` kernel function installs this table.
+//    The `init_hardware` kernel function installs this table.
 
 // The `exception_handler` macro creates one exception handler
 .altmacro
@@ -126,6 +126,9 @@ exception_entry:
         pushq %rcx
         pushq %rax
 
+1:      testb $1, panicing             // loop if panicing
+        jne 1b
+
         // call `proc::exception(regstate*)`
         // load current `proc` from the current cpustate,
         // which is accessible via `%gs`
@@ -203,6 +206,9 @@ syscall_entry:
         subq $8, %rsp                  // %rcx clobbered by `syscall`
         pushq %rax
 
+1:      testb $1, panicing             // loop if panicing
+        jne 1b
+
         movq %gs:(8), %rdi
         movq %rsp, %rsi
         call _ZN4proc7syscallEP8regstate
@@ -258,6 +264,9 @@ _ZN4proc14yield_noreturnEv:
 // proc::resume()
 .globl _ZN4proc6resumeEv
 _ZN4proc6resumeEv:
+1:      testb $1, panicing             // loop if panicing
+        jne 1b
+
         // do we have yieldstate? (is `this->yields_ != nullptr`?)
         movq 16(%rdi), %rax
         testq %rax, %rax

@@ -124,9 +124,11 @@ void cpustate::schedule(proc* yielding_from) {
     assert(spinlock_depth_ == 0);  // no spinlocks are held
     assert(read_rbp() % 16 == 0);  // check stack alignment
 
-    // do not run idle task unless nothing else is runnable
-    if (current_ == idle_task_) {
-        current_ = nullptr;
+    // initialize idle task; don't re-run it
+    if (!idle_task_) {
+        init_idle_task();
+    } else if (current_ == idle_task_) {
+        yielding_from = idle_task_;
     }
 
     while (1) {
@@ -174,7 +176,7 @@ void cpustate::schedule(proc* yielding_from) {
 
         // if run queue was empty, run the idle task
         if (!current_) {
-            current_ = idle_task();
+            current_ = idle_task_;
         }
     }
 }
@@ -192,11 +194,9 @@ void idle(proc*) {
     }
 }
 
-proc* cpustate::idle_task() {
-    if (!idle_task_) {
-        idle_task_ = reinterpret_cast<proc*>(kallocpage());
-        idle_task_->init_kernel(-1, idle);
-        assert(idle_task_->regs_->reg_rbp % 16 == 0);
-    }
-    return idle_task_;
+void cpustate::init_idle_task() {
+    assert(!idle_task_);
+    idle_task_ = reinterpret_cast<proc*>(kallocpage());
+    idle_task_->init_kernel(-1, idle);
+    assert(idle_task_->regs_->reg_rbp % 16 == 0);
 }

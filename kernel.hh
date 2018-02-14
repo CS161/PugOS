@@ -102,10 +102,10 @@ struct __attribute__((aligned(4096))) cpustate {
 
     void enqueue(proc* p);
     void schedule(proc* yielding_from) __attribute__((noreturn));
-    proc* idle_task();
 
  private:
     void init_cpu_hardware();
+    void init_idle_task();
 };
 
 #define NCPU 16
@@ -365,6 +365,9 @@ void error_printf(int color, const char* format, ...) __attribute__((noinline));
 void error_printf(const char* format, ...) __attribute__((noinline));
 int error_vprintf(int cpos, int color, const char* format, va_list val)
     __attribute__((noinline));
+
+// `panicing == true` iff some CPU has paniced
+extern bool panicing;
 
 
 // this_cpu
