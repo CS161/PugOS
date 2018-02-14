@@ -162,7 +162,7 @@ void* kalloc(size_t sz) {
 
     int order = order_of(sz) < MIN_ORDER ? MIN_ORDER : order_of(sz);
     if (order > MAX_ORDER) {
-        debug_printf("Order %d too big, returning nullptr\n", order);
+        // debug_printf("Order %d too big, returning nullptr\n", order);
         return nullptr;
     }
 
@@ -172,8 +172,8 @@ void* kalloc(size_t sz) {
     int largest_min_order = min_larger_order(order);
     if (largest_min_order < 0 || largest_min_order > MAX_ORDER) {
         page_lock.unlock(irqs);
-        debug_printf("kalloc(%d): largest_min_order %d invalid, returning "
-            "nullptr\n", sz, largest_min_order);
+        // debug_printf("kalloc(%d): largest_min_order %d invalid, returning "
+        //     "nullptr\n", sz, largest_min_order);
         return nullptr;
     }
 

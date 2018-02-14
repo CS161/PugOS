@@ -2,6 +2,7 @@
 #define CHICKADEE_KERNEL_H
 #include "x86-64.h"
 #include "lib.hh"
+//#include "k-debug.hh"
 #include "k-list.hh"
 #include "k-lock.hh"
 #include "k-memrange.hh"
@@ -17,7 +18,7 @@ struct yieldstate;
 //
 //    Functions, constants, and definitions for the kernel.
 
-#define DEBUG false
+#define DEBUG 1
 
 
 // Process descriptor type
