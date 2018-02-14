@@ -30,7 +30,7 @@ void kernel_start(const char* command) {
     }
 
     auto irqs = ptable_lock.lock();
-    process_setup(1, "p-allocexit");
+    process_setup(1, "p-testmsleep");
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
