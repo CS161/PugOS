@@ -52,7 +52,7 @@ static int ka2p(void* addr) {
     }
 
 void annihilate(proc* p) {
-    // log_printf("cpustate::annihilate pid %d\n", p->pid_);
+    log_printf("cpustate::annihilate pid %d\n", p->pid_);
     // free stack page
     // vmiter it(p, MEMSIZE_VIRTUAL - PAGESIZE);
     // log_printf("\tstack page: pa=%p ka=%p\n", it.pa(), it.ka());
@@ -62,24 +62,32 @@ void annihilate(proc* p) {
 
     for (vmiter vmit(p); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
         if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
-            // log_printf("%d virtual mem: freeing va %p\n", p->pid_, it.va());
+            log_printf("%d virtual mem: freeing va %p\n", p->pid_, vmit.va());
+
             kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
         }
     }
 
     // free misc proc struct stuff
-    // log_printf("\tfreeing regs_ and yields_\n");
-    kfree(p->regs_);
-    kfree(p->yields_);
+    // log_printf("freeing regs_ and yields_\n");
+    // kfree(p->regs_);
+    // kfree(p->yields_);
 
     // free pagetables
-    // log_printf("\tfreeing l3-1 pagetables:\n");
-    for (ptiter ptit(p->pagetable_, 0); ptit.low(); ptit.next()) {
+    log_printf("freeing l3-1 pagetables:\n");
+    for (ptiter ptit(p, 0); ptit.low(); ptit.next()) {
         // log_printf("\t\tpa=%p\n", ptit.ptp_pa());
+        // if (ptit.ptp_pa() % PAGESIZE != 0) {
+        log_printf("FREE PAGETABLE: ");
+        log_printf("pid %d ", p->pid_);
+        log_printf("pa %p ", ptit.ptp_pa());
+        log_printf("va %p\n", ptit.va());
+        // }
         kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
     }
     // log_printf("\tfreeing l4 pagetable pa=%p ka=%p\n",
         // ka2pa(p->pagetable_), p->pagetable_);
+    log_printf("Freeing l4 pagetable\n");
     kfree(p->pagetable_);
 
     auto pid = p->pid_;

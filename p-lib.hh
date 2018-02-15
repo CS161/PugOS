@@ -91,8 +91,8 @@ static inline int sys_msleep(unsigned msec) {
 
 // sys_getppid()
 //    Return parent process ID.
-static inline pid_t sys_getppid() {
-    return E_NOSYS;
+static inline pid_t sys_getppid(void) {
+    return syscall0(SYSCALL_GETPPID);
 }
 
 // sys_panic(msg)

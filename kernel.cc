@@ -30,7 +30,7 @@ void kernel_start(const char* command) {
     }
 
     auto irqs = ptable_lock.lock();
-    process_setup(1, "p-testmsleep");
+    process_setup(1, "p-testppid");
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
@@ -61,6 +61,9 @@ void process_setup(pid_t pid, const char* name) {
 
     r = vmiter(p, ktext2pa(console)).map(ktext2pa(console), PTE_P|PTE_W|PTE_U);
     assert(r >= 0);
+
+    // init process is its own parent
+    if (pid == 1) p->ppid_ = 1;
 
     int cpu = pid % ncpu;
     cpus[cpu].runq_lock_.lock_noirq();
@@ -118,6 +121,7 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
         return -1;
     }
     fproc->pid_ = fpid;
+    fproc->ppid_ = ogproc->pid_;
     fproc->state_ = proc::broken;
     ptable_lock.unlock(irqs);
 
@@ -360,6 +364,10 @@ uintptr_t proc::syscall(regstate* regs) {
         r = 0;
         break;
     }
+
+    case SYSCALL_GETPPID:
+        r = ppid_;
+        break;
 
     case SYSCALL_COMMIT_SEPPUKU: {
         r = seppuku();

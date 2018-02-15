@@ -225,6 +225,9 @@ static int buddy_pindex(int p, int order) {
 void kfree(void* ptr) {
     if (ptr == nullptr) return;
 
+    if (ka2pa(ptr) % PAGESIZE != 0) {
+        log_printf("BAD FREE: pa %p va %p\n", ka2pa(ptr), ptr);
+    }
     assert(ka2pa(ptr) % PAGESIZE == 0);
 
     auto irqs = page_lock.lock();

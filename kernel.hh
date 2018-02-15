@@ -36,6 +36,8 @@ struct __attribute__((aligned(4096))) proc {
     state_t state_;                    // process state
     x86_64_pagetable* pagetable_;      // process's page table
 
+    pid_t ppid_;                       // parent process ID
+
     int canary_;
 
     proc() = default;
