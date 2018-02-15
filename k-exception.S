@@ -180,29 +180,29 @@ syscall_entry:
         movq %gs:(8), %rsp             // change to kernel task stack
         addq $KTASKSTACK_SIZE, %rsp
 
-        subq $8, %rsp //pushq $(SEGSEL_APP_DATA + 3)   // %ss
-        subq $8, %rsp //pushq %gs:(16)                 // %rsp
-        subq $8, %rsp //pushq %r11                     // %rflags
-        subq $8, %rsp //pushq $(SEGSEL_APP_CODE + 3)   // %cs
+        pushq $(SEGSEL_APP_DATA + 3)   // %ss
+        pushq %gs:(16)                 // %rsp
+        pushq %r11                     // %rflags
+        pushq $(SEGSEL_APP_CODE + 3)   // %cs
         pushq %rcx                     // %rip
 
         subq $8, %rsp                  // error code unused
-        subq $8, %rsp //pushq $-1                      // reg_intno
-        subq $8, %rsp //pushq %gs
-        subq $8, %rsp //pushq %fs
-        subq $8, %rsp //pushq %r15 // callee saved
-        subq $8, %rsp //pushq %r14 // callee saved
-        subq $8, %rsp //pushq %r13 // callee saved
-        subq $8, %rsp //pushq %r12 // callee saved
+        pushq $-1                      // reg_intno
+        pushq %gs
+        pushq %fs
+        pushq %r15 // callee saved
+        pushq %r14 // callee saved
+        pushq %r13 // callee saved
+        pushq %r12 // callee saved
         subq $8, %rsp                  // %r11 clobbered by `syscall`
-        subq $8, %rsp //pushq %r10
-        subq $8, %rsp //pushq %r9
-        subq $8, %rsp //pushq %r8
+        pushq %r10
+        pushq %r9
+        pushq %r8
         pushq %rdi
-        subq $8, %rsp //pushq %rsi
-        subq $8, %rsp //pushq %rbp // callee saved
-        subq $8, %rsp //pushq %rbx // callee saved
-        subq $8, %rsp //pushq %rdx
+        pushq %rsi
+        pushq %rbp // callee saved
+        pushq %rbx // callee saved
+        pushq %rdx
         subq $8, %rsp                  // %rcx clobbered by `syscall`
         pushq %rax
 

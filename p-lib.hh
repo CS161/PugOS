@@ -112,8 +112,8 @@ static inline int sys_map_console(void* addr) {
 
 // sys_commit_seppuku()
 //    Die an honorable death
-static inline int sys_break_literally_everything() {
-    return syscall0(SYSCALL_BREAK_LITERALLY_EVERYTHING);
+static inline int sys_commit_seppuku() {
+    return syscall0(SYSCALL_COMMIT_SEPPUKU);
 }
 
 // OTHER HELPER FUNCTIONS
