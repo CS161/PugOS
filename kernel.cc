@@ -373,7 +373,7 @@ uintptr_t proc::syscall(regstate* regs) {
         r = ppid_;
         break;
 
-    case SYSCALL_COMMIT_SEPPUKU: {
+    case SYSCALL_BREAK_LITERALLY_EVERYTHING: {
         r = seppuku();
         break;
     }
