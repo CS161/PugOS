@@ -40,7 +40,7 @@ struct __attribute__((aligned(4096))) proc {
 
     int canary_;
 
-    proc() = default;
+    proc();
     NO_COPY_OR_ASSIGN(proc);
 
     inline bool contains(uintptr_t addr) const;
@@ -70,6 +70,8 @@ extern spinlock ptable_lock;
 
 extern int canary_value;
 
+// allocate a new `proc` and call its constructor
+proc* kalloc_proc();
 
 // CPU state type
 struct __attribute__((aligned(4096))) cpustate {
@@ -83,6 +85,7 @@ struct __attribute__((aligned(4096))) cpustate {
 
     list<proc, &proc::runq_link_> runq_;
     spinlock runq_lock_;
+    unsigned long nschedule_;
     proc* idle_task_;
 
     unsigned spinlock_depth_;
@@ -135,8 +138,8 @@ struct yieldstate {
 
 // timekeeping
 
-#define HZ 100                  // number of ticks per second
-extern unsigned long ticks;     // number of ticks since boot
+#define HZ 100                           // number of ticks per second
+extern volatile unsigned long ticks;     // number of ticks since boot
 
 
 // Segment selectors
@@ -273,13 +276,11 @@ void kfree(void* ptr);
 //    after `physical_ranges` is initialized.
 void init_kalloc();
 
-// test_kalloc
-//    Run unit tests on the kalloc system.
+// run unit tests on the kalloc system
 void test_kalloc();
 
 
-// init_hardware
-//    Initialize hardware and CPUs.
+// initialize hardware and CPUs
 void init_hardware();
 
 
@@ -382,6 +383,9 @@ inline cpustate* this_cpu() {
     return result;
 }
 
+// adjust_this_cpu_spinlock_depth(delta)
+//    Adjust this CPU's spinlock_depth_ by `delta`. Does *not* require
+//    disabled interrupts.
 inline void adjust_this_cpu_spinlock_depth(int delta) {
     asm volatile ("addl %1, %%gs:%0"
                   : "+m" (*reinterpret_cast<int*>

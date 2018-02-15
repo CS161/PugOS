@@ -10,6 +10,8 @@ int ncpu;
 //    by the relevant CPU.
 
 void cpustate::init() {
+    // Note that the `cpu::cpu` constructor has already been called.
+
     {
         // check that this CPU is one of the expected CPUs
         uintptr_t addr = reinterpret_cast<uintptr_t>(this);
@@ -28,6 +30,7 @@ void cpustate::init() {
     index_ = this - cpus;
     runq_lock_.clear();
     idle_task_ = nullptr;
+    nschedule_ = 0;
     spinlock_depth_ = 0;
 
     canary_ = canary_value;
@@ -105,8 +108,8 @@ void annihilate(proc* p) {
 
 // cpustate::enqueue(p)
 //    Enqueue `p` on this CPU's run queue. `p` must not be on any
-//    run queue, it must be resumable, and `this->runq_lock_` must
-//    be held.
+//    run queue, it must be resumable (or not runnable), and
+//    `this->runq_lock_` must be held.
 
 void cpustate::enqueue(proc* p) {
     assert(p->resumable());
@@ -145,6 +148,9 @@ void cpustate::schedule(proc* yielding_from) {
     } else if (current_ == idle_task_) {
         yielding_from = idle_task_;
     }
+
+    // increment schedule counter
+    ++nschedule_;
 
     while (1) {
         // if (current_) {

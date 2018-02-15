@@ -6,7 +6,7 @@
 //
 //    This is the kernel.
 
-unsigned long ticks;            // # timer interrupts so far on CPU 0
+volatile unsigned long ticks;   // # timer interrupts so far on CPU 0
 int kdisplay;                   // type of display
 
 static void kdisplay_ontick();
@@ -44,8 +44,12 @@ void kernel_start(const char* command) {
 //    %rip and %rsp, gives it a stack page, and marks it as runnable.
 
 void process_setup(pid_t pid, const char* name) {
+#ifdef CHICKADEE_FIRST_PROCESS
+    name = CHICKADEE_FIRST_PROCESS;
+#endif
+
     assert(!ptable[pid]);
-    proc* p = ptable[pid] = reinterpret_cast<proc*>(kallocpage());
+    proc* p = ptable[pid] = kalloc_proc();
     x86_64_pagetable* npt = kalloc_pagetable();
     assert(p && npt);
     p->init_user(pid, npt);
