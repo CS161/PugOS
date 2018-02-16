@@ -207,7 +207,6 @@ void* kalloc(size_t sz) {
 
 // buddy_pindex(p, order)
 //    Returns the pindex of the buddy block
-//    MUST BE CALLED WITH page_lock HELD
 static int buddy_pindex(int p, int order) {
     p *= PAGESIZE;
     if (p % (1 << (order + 1)) == 0) {
