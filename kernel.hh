@@ -2,7 +2,6 @@
 #define CHICKADEE_KERNEL_H
 #include "x86-64.h"
 #include "lib.hh"
-//#include "k-debug.hh"
 #include "k-list.hh"
 #include "k-lock.hh"
 #include "k-memrange.hh"
@@ -13,12 +12,12 @@ struct elf_program;
 struct proc;
 struct yieldstate;
 
+#define DEBUG true
+#include "k-debug.hh"
 
 // kernel.h
 //
 //    Functions, constants, and definitions for the kernel.
-
-#define DEBUG 1
 
 
 // Process descriptor type
@@ -351,9 +350,8 @@ int program_load(proc* p, int programnumber);
 //    so that messages written to the QEMU "parallel port" end up in `log.txt`.
 void log_printf(const char* format, ...) __attribute__((noinline));
 void log_vprintf(const char* format, va_list val) __attribute__((noinline));
-void debug_printf(int level, const char* format, ...) __attribute__((noinline));
-void debug_printf(const char* format, ...) __attribute__((noinline));
-
+void debug_printf_(const char* file, const char* func, int line,
+                          const char* format, ...) __attribute__((noinline));
 
 // log_backtrace
 //    Print a backtrace to the host's `log.txt` file.

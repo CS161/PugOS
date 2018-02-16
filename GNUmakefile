@@ -46,7 +46,8 @@ KERNEL_OBJS = $(OBJDIR)/k-exception.ko \
 	$(OBJDIR)/kernel.ko $(OBJDIR)/k-alloc.ko $(OBJDIR)/k-vmiter.ko \
 	$(OBJDIR)/k-init.ko $(OBJDIR)/k-hardware.ko \
 	$(OBJDIR)/k-cpu.ko $(OBJDIR)/k-proc.ko \
-	$(OBJDIR)/k-memviewer.ko $(OBJDIR)/lib.ko
+	$(OBJDIR)/k-memviewer.ko $(OBJDIR)/lib.ko \
+	$(OBJDIR)/k-debug.ko
 
 PROCESS_LIB_OBJS = $(OBJDIR)/lib.o $(OBJDIR)/p-lib.o
 PROCESS_OBJS = $(PROCESS_LIB_OBJS) \

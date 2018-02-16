@@ -301,24 +301,6 @@ void log_printf(const char* format, ...) {
     va_end(val);
 }
 
-void debug_printf(int level, const char* format, ...) {
-    (void) level;
-    if (DEBUG) {
-        va_list val;
-        va_start(val, format);
-        log_vprintf(format, val);
-        va_end(val);
-    }
-}
-void debug_printf(const char* format, ...) {
-    if (DEBUG) {
-        va_list val;
-        va_start(val, format);
-        log_vprintf(format, val);
-        va_end(val);
-    }
-}
-
 
 // log_backtrace(prefix)
 //    Print a backtrace to `log.txt`, each line prefixed by `prefix`.
