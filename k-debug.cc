@@ -1,6 +1,4 @@
 #include "kernel.hh"
-// extern void log_printf(const char* format, ...) __attribute__((noinline));
-// extern void log_vprintf(const char* format, va_list val) __attribute__((noinline));
 
 // hash function
 static constexpr size_t h(const char* str) {
