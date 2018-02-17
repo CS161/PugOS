@@ -50,12 +50,14 @@ KERNEL_OBJS = $(OBJDIR)/k-exception.ko \
 
 PROCESS_LIB_OBJS = $(OBJDIR)/lib.o $(OBJDIR)/p-lib.o
 PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
+	$(OBJDIR)/p-init.o \
 	$(OBJDIR)/p-allocator.o \
 	$(OBJDIR)/p-allocexit.o \
 	$(OBJDIR)/p-testmsleep.o \
 	$(OBJDIR)/p-testppid.o
 
-FLATFS_CONTENTS = obj/p-allocator \
+FLATFS_CONTENTS = obj/p-init \
+	obj/p-allocator \
 	obj/p-allocexit \
 	obj/p-testmsleep \
 	obj/p-testppid

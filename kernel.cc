@@ -30,7 +30,8 @@ void kernel_start(const char* command) {
     }
 
     auto irqs = ptable_lock.lock();
-    process_setup(1, "p-testppid");
+    process_setup(1, "p-init");
+    process_setup(2, "p-testppid");
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
@@ -47,8 +48,6 @@ void process_setup(pid_t pid, const char* name) {
 #ifdef CHICKADEE_FIRST_PROCESS
     name = CHICKADEE_FIRST_PROCESS;
 #endif
-
-    debug_pulse();
 
     assert(!ptable[pid]);
     proc* p = ptable[pid] = kalloc_proc();
@@ -68,8 +67,9 @@ void process_setup(pid_t pid, const char* name) {
     r = vmiter(p, ktext2pa(console)).map(ktext2pa(console), PTE_P|PTE_W|PTE_U);
     assert(r >= 0);
 
+    p->children_.reset();
     // init process is its own parent
-    if (pid == 1) p->ppid_ = 1;
+    p->ppid_ = 1;
 
     int cpu = pid % ncpu;
     cpus[cpu].runq_lock_.lock_noirq();
@@ -82,21 +82,14 @@ static void process_exit(proc* p) {
     // log_printf("process_exit on pid %d\n", p->pid_);
     auto irqs = ptable_lock.lock();
     p->state_ = proc::broken;
-    ptable_lock.unlock(irqs);
 
-    // free process' writable virtual memory, except for the stack page and
-    // console
-    // for (vmiter it(p); it.va() < MEMSIZE_VIRTUAL - PAGESIZE; it.next()) {
-    //     if (it.user() && it.writable() && it.pa() != ktext2pa(console)) {
-    //         // log_printf("%d virtual mem: freeing va %p\n", p->pid_, it.va());
-    //         kfree(reinterpret_cast<void*>(pa2ka(it.pa())));
-    //     }
-        // else if (it.user()) {
-            // if (vmiter(fpt, it.va()).map(it.pa(), it.perm()) < 0) {
-            //     return -1;
-            // }
-        // }
-    //}
+    // fix process hierarchy
+    ptable[p->ppid_]->children_.erase(p);
+    while (!p->children_.empty()) {
+        p->children_.pop_front()->ppid_ = 1;
+    }
+    debug_printf("Exitted pid %d\n", p->pid_);
+    ptable_lock.unlock(irqs);
 }
 
 
@@ -127,8 +120,10 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
         return -1;
     }
     fproc->pid_ = fpid;
-    fproc->ppid_ = ogproc->pid_;
     fproc->state_ = proc::broken;
+    fproc->ppid_ = ogproc->pid_;
+    fproc->children_.reset();
+    ogproc->children_.push_back(fproc);
     ptable_lock.unlock(irqs);
 
 

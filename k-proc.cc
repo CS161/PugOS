@@ -3,8 +3,8 @@
 #include "k-vmiter.hh"
 
 proc* ptable[NPROC];                    // array of process descriptor pointers
-spinlock ptable_lock;                   // protects `ptable`
-
+// protects `ptable`, pid_, ppid_, and children_
+spinlock ptable_lock;
 
 // proc::proc()
 //    The constructor initializes the `proc` to empty.

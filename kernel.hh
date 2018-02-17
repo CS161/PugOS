@@ -25,6 +25,9 @@ struct __attribute__((aligned(4096))) proc {
     yieldstate* yields_;               // process's current yield state
 
     list_links runq_link_;             // for cpu run queue
+    list_links child_link_;            // for reparenting
+
+    list<proc, &proc::child_link_> children_;   // procs st. ppid_ = this->pid_
 
     enum state_t {
         blank = 0, runnable, blocked, broken

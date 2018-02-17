@@ -23,14 +23,8 @@ inline constexpr size_t debug_hash(const char* str) {
 
 inline constexpr bool debug_filter(const char* file, const char* func) {
     switch (debug_hash(file)) {
-        case debug_hash("kernel.cc"): return false;
-        case debug_hash("k-cpu.cc"): {
-            switch (debug_hash(func)) {
-                case debug_hash("annihilate"): return true;
-                default: return false;
-            }
-        }
-        default: return false;
+        case debug_hash("k-cpu.cc"): return false;
+        default: return true;
     }
 }
 
