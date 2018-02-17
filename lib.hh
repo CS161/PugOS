@@ -142,6 +142,9 @@ inline constexpr T roundup_pow2(T x) {
 #define KDISPLAY_NONE           0
 #define KDISPLAY_MEMVIEWER      1
 
+// sys_waitpid() options
+#define W_NOHANG                1
+
 
 // Console printing
 

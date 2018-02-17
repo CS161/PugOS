@@ -107,12 +107,12 @@ void annihilate(proc* p) {
 
 
 // cpustate::enqueue(p)
-//    Enqueue `p` on this CPU's run queue. `p` must not be on any
-//    run queue, it must be resumable (or not runnable), and
-//    `this->runq_lock_` must be held.
+//    Enqueue `p` on this CPU's run queue. Does nothing if `p` is
+//    already on some run queue. `p` must be resumable (or not
+//    runnable), and `this->runq_lock_` must be held.
 
 void cpustate::enqueue(proc* p) {
-    assert(p->resumable());
+    assert(p->resumable() || p->state_ != proc::runnable);
     runq_.push_back(p);
 }
 
