@@ -81,38 +81,20 @@ void process_setup(pid_t pid, const char* name) {
 }
 
 
-static void process_exit(proc* p) {
-    // log_printf("process_exit on pid %d\n", p->pid_);
+void process_exit(proc* p) {
     auto irqs = ptable_lock.lock();
-
-#if DEBUG
-    debug_printf("init process children:");
-    proc* c = ptable[1]->children_.front();
-    do {
-        if (c) {
-            debug_printf(" %d", c->pid_);
-            c = ptable[1]->children_.next(c);
-        }
-        else {
-            debug_printf(" null");
-        }
-    } while (c);
-    debug_printf("\n");
-#endif
-
-    debug_printf("Trying to exit pid %d (daddy %d)\n", p->pid_, p->ppid_);
     p->state_ = proc::broken;
 
-    // fix process hierarchy
+    // manage process hierarchy
     ptable[p->ppid_]->children_.erase(p);
     while (!p->children_.empty()) {
         proc* child = p->children_.pop_front();
         child->ppid_ = 1;
         ptable[1]->children_.push_back(child);
     }
-    debug_printf("Exitted pid %d\n", p->pid_);
     ptable_lock.unlock(irqs);
 }
+
 
 
 // process_fork(ogproc, ogregs)
