@@ -48,6 +48,8 @@ void process_setup(pid_t pid, const char* name) {
     name = CHICKADEE_FIRST_PROCESS;
 #endif
 
+    debug_pulse();
+
     assert(!ptable[pid]);
     proc* p = ptable[pid] = kalloc_proc();
     x86_64_pagetable* npt = kalloc_pagetable();

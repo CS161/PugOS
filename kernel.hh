@@ -12,9 +12,6 @@ struct elf_program;
 struct proc;
 struct yieldstate;
 
-#define DEBUG true
-#include "k-debug.hh"
-
 // kernel.h
 //
 //    Functions, constants, and definitions for the kernel.
@@ -351,7 +348,7 @@ int program_load(proc* p, int programnumber);
 void log_printf(const char* format, ...) __attribute__((noinline));
 void log_vprintf(const char* format, va_list val) __attribute__((noinline));
 void debug_printf_(const char* file, const char* func, int line,
-                          const char* format, ...) __attribute__((noinline));
+                          const char* format, ...);
 
 // log_backtrace
 //    Print a backtrace to the host's `log.txt` file.
@@ -420,5 +417,8 @@ inline bool proc::resumable() const {
     assert(!yields_ || contains(yields_));  // same for `yields_`
     return regs_ || yields_;
 }
+
+#define DEBUG true
+#include "k-debug.hh"
 
 #endif
