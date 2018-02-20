@@ -120,6 +120,7 @@ inline constexpr T roundup_pow2(T x) {
 #define SYSCALL_MAP_CONSOLE     8
 #define SYSCALL_MSLEEP          9
 #define SYSCALL_GETPPID         10
+#define SYSCALL_WAITPID         11
 #define SYSCALL_COMMIT_SEPPUKU  44
 #define SYSCALL_KDISPLAY        100
 

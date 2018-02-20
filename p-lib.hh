@@ -34,6 +34,18 @@ inline uintptr_t syscall0(int syscallno, uintptr_t arg0) {
     return rax;
 }
 
+inline uintptr_t syscall0(int syscallno, uintptr_t arg0, uintptr_t arg1) {
+    register uintptr_t rax asm("rax") = syscallno;
+    register uintptr_t rdi asm("rdi") = arg0;
+    register uintptr_t rsi asm("rsi") = arg1;
+    asm volatile ("syscall"
+                  : "+a" (rax), "+D" (rdi), "+S" (rsi)
+                  :
+                  : "cc", "rcx", "rdx",
+                    "r8", "r9", "r10", "r11");
+    return rax;
+}
+
 // sys_getpid
 //    Return current process ID.
 static inline pid_t sys_getpid(void) {
@@ -102,7 +114,13 @@ static inline pid_t sys_getppid(void) {
 static inline pid_t sys_waitpid(pid_t pid,
                                 int* status = nullptr,
                                 int options = 0) {
-    return E_NOSYS;
+    pid_t r_pid = syscall0(SYSCALL_WAITPID, pid, options);
+    uintptr_t rcx;
+    asm volatile("movq %%rcx,%0" : "=r" (rcx));
+    if (rcx != (uintptr_t) nullptr) {
+        *status = rcx;
+    }
+    return r_pid;
 }
 
 // sys_panic(msg)

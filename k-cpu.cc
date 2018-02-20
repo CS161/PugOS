@@ -182,9 +182,9 @@ void cpustate::schedule(proc* yielding_from) {
             lcr3(ktext2pa(early_pagetable));
             
             // if `current` is broken, clean it up
-            if (current_->state_ == proc::broken) {
-                annihilate(current_);
-            }
+            // if (current_->state_ == proc::broken) {
+            //     annihilate(current_);
+            // }
         
             current_ = yielding_from = nullptr;
         }

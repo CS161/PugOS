@@ -31,7 +31,7 @@ void kernel_start(const char* command) {
 
     auto irqs = ptable_lock.lock();
     process_setup(1, "p-init");
-    process_setup(2, "p-testppid");
+    process_setup(2, "p-testwaitpid");
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
@@ -81,10 +81,40 @@ void process_setup(pid_t pid, const char* name) {
 }
 
 
-void process_exit(proc* p) {
-    auto irqs = ptable_lock.lock();
-    p->state_ = proc::broken;
+void process_exit(proc* p, int status = 0) {
+    p->exit_status_ = status;
 
+    // free virtual memory
+    for (vmiter vmit(p); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
+        if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
+            debug_printf("virtual mem: freeing va %p\n", vmit.va());
+
+            kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
+        }
+    }
+
+    // free pagetables
+    debug_printf("freeing l3-1 pagetables:\n");
+    for (ptiter ptit(p, 0); ptit.low(); ptit.next()) {
+        // debug_printf("\t\tpa=%p\n", ptit.ptp_pa());
+        // if (ptit.ptp_pa() % PAGESIZE != 0) {
+        debug_printf("FREE PAGETABLE: ");
+        debug_printf("pid %d ", p->pid_);
+        debug_printf("pa %p ", ptit.ptp_pa());
+        debug_printf("va %p\n", ptit.va());
+        // }
+        kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
+    }
+
+    p->state_ = proc::broken;
+}
+
+
+// omae wa mou shindeiru
+int process_reap(pid_t pid) {
+    debug_printf("reaping pid %d\n", pid);
+    auto irqs = ptable_lock.lock();
+    proc* p = ptable[pid];
     // manage process hierarchy
     ptable[p->ppid_]->children_.erase(p);
     while (!p->children_.empty()) {
@@ -92,7 +122,16 @@ void process_exit(proc* p) {
         child->ppid_ = 1;
         ptable[1]->children_.push_back(child);
     }
+
+    int status = p->exit_status_;
+    debug_printf("freeing l4 pagetable pa=%p ka=%p\n",
+                 ka2pa(p->pagetable_), p->pagetable_);
+    kfree(p->pagetable_);
+    debug_printf("freeing process struct pa=%p ka=%p\n", ka2pa(p), p);
+    kfree(p);
+    ptable[pid] = nullptr;
     ptable_lock.unlock(irqs);
+    return status;
 }
 
 
@@ -345,7 +384,8 @@ uintptr_t proc::syscall(regstate* regs) {
     }
 
     case SYSCALL_EXIT: {
-        process_exit(this);
+        int status = regs->reg_rdi;
+        process_exit(this, status);
         this->yield_noreturn();
     }
 
@@ -373,6 +413,86 @@ uintptr_t proc::syscall(regstate* regs) {
     case SYSCALL_GETPPID:
         r = ppid_;
         break;
+
+    case SYSCALL_WAITPID: {
+        pid_t child_pid = regs->reg_rdi;
+        assert(child_pid < NPROC && child_pid >= 0);
+        int options = regs->reg_rsi;
+
+        auto irqs = ptable_lock.lock();
+        debug_printf("waitpid from pid %d on child pid %d, options %s W_NOHANG"
+                     "\n", pid_, child_pid, options == W_NOHANG ? "=" : "!=");
+
+// #if DEBUG_LOCAL
+//         debug_printf("children:");
+//         proc* _c = children_.front();
+//         do {
+//             if (_c) {
+//                 debug_printf(" %d", _c->)
+//             }
+//             else {
+//                 debug_printf(" none");
+//             }
+//         } while (_c);
+//         debug_printf("\n");
+// #endif
+
+        pid_t parent_of_child = 0;
+        if (ptable[child_pid]) {
+            parent_of_child = ptable[child_pid]->ppid_;
+        }
+        ptable_lock.unlock(irqs);
+
+        pid_t to_reap = 0;
+        if ((child_pid != 0 && pid_ != parent_of_child)
+            || (child_pid == 0 && children_.empty())) {
+            r = E_CHILD;
+            debug_printf("returning E_CHILD r=%d\n", r);
+        }
+        else {
+            do {
+                irqs = ptable_lock.lock();
+
+                // wait for any child
+                if (child_pid == 0) {
+                    for (auto p = children_.front(); p; p = children_.next(p)) {
+                        if (p->state_ == proc::broken) {
+                            to_reap = p->pid_;
+                            break;
+                        }
+                    }
+                }
+                // wait for a child (child_pid)
+                else {
+                    if (ptable[child_pid]->state_ == proc::broken) {
+                        to_reap = ptable[child_pid]->pid_;
+                    }
+                }
+
+                ptable_lock.unlock(irqs);
+                if (to_reap || options == W_NOHANG) {
+                    break;
+                }
+                this->yield(); 
+            } while (true);
+        }
+        debug_printf("to_reap pid: %d\n", to_reap);
+
+        regs->reg_rcx = (uintptr_t) nullptr;
+        if (!to_reap && options == W_NOHANG && r != E_CHILD) {
+            r = E_AGAIN;
+            debug_printf("returning E_AGAIN r=%d\n", r);
+        }
+        else {
+            int exit_status = process_reap(to_reap);
+            regs->reg_rcx = exit_status;
+            r = to_reap;
+        }
+
+        debug_printf("rcx = %d\n", regs->reg_rcx);
+
+        break;
+    }
 
     case SYSCALL_COMMIT_SEPPUKU: {
         r = seppuku();

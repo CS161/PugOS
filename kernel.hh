@@ -30,12 +30,14 @@ struct __attribute__((aligned(4096))) proc {
     list<proc, &proc::child_link_> children_;   // procs st. ppid_ = this->pid_
 
     enum state_t {
-        blank = 0, runnable, blocked, broken
+        blank = 0, runnable, blocked, broken, reapable
     };
     state_t state_;                    // process state
     x86_64_pagetable* pagetable_;      // process's page table
 
     pid_t ppid_;                       // parent process ID
+
+    int exit_status_;
 
     int canary_;
 
