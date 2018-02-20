@@ -200,7 +200,7 @@ void console_memviewer(const proc* vmp) {
     }
 
     // print virtual memory
-    if (vmp && vmp->pagetable_ != early_pagetable) {
+    if (vmp && vmp->pagetable_ && vmp->pagetable_ != early_pagetable) {
         console_printf(CPOS(10, 18), 0x0F00,
                        "VIRTUAL ADDRESS SPACE FOR %d; STATE %s\n", vmp->pid_,
                        state_string(vmp));
