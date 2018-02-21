@@ -34,20 +34,64 @@ inline waiter::~waiter() {
     // optional error-checking code
 }
 
+
+// waiter::prepare(waitq)
+//    This function prepares the waiter to sleep on the named wait queue, and
+//    implements the “enqueue” part of blocking. Specifically, the function:
+//    - Locks the waitq data structure.
+//    - Sets p->state_ to proc::blocked. This means the state is blocked even
+//      though the associated kernel task is running!
+//    - Adds the waiter to a linked list of waiters associated with the waitq.
+//    - Unlocks the waitq data structure.
+
 inline void waiter::prepare(wait_queue* wq) {
-    // your code here
+    wq_ = wq;
+    auto irqs = wq_->lock_.lock();
+    p_->state_ = proc::blocked;
+    wq_->q_.push_back(this);
+    wq_->lock_.unlock(irqs);
 }
+
+
+// waiter::block()
+//    This function implements the “block” part of blocking. Specifically, the
+//    function:
+//    - Calls p->yield(). If the process still has state_ == blocked, then the
+//      process will block.
+//    - When the yield call returns, it calls waiter::clear() to clean up the
+//      waiter.
 
 inline void waiter::block() {
-    // your code here
+    p_->yield();
+    clear();
 }
+
+
+// waiter::clear()
+//    This function cleans up the waiter after the process has woken up, by
+//    undoing the effect of any preceding waiter::prepare. Specifically, the
+//    function:
+//    - Locks the waitq data structure.
+//    - Sets p->state_ to proc::runnable.
+//    - Removes the waiter from the linked list, if it is currently linked.
+//    - Unlocks the waitq data structure.
 
 inline void waiter::clear() {
-    // your code here
+    auto irqs = wq_->lock_.lock();
+    p_->state_ = proc::runnable;
+    wq_->q_.erase(this);
+    wq_->lock_.unlock(irqs);
 }
+
+
+// waiter::wake()
+//    Wakes up all waiting processes currently on the wait queue for this waiter
 
 inline void waiter::wake() {
-    // your code here
+    auto irqs = wq_->lock_.lock();
+    while (auto w = wq_->q_.pop_front()) {
+        w->p_->wake();
+    }
+    wq_->lock_.unlock(irqs);
 }
-
 #endif

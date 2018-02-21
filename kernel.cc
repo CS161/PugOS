@@ -74,7 +74,7 @@ void process_setup(pid_t pid, const char* name) {
         ptable[1]->children_.push_back(p);
     }
 
-    int cpu = pid % ncpu;
+    int cpu = p->cpu_ = pid % ncpu;
     cpus[cpu].runq_lock_.lock_noirq();
     cpus[cpu].enqueue(p);
     cpus[cpu].runq_lock_.unlock_noirq();
@@ -153,7 +153,7 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
 
     // 2. Allocate a struct proc and a page table.
     // 5. Store the new process in the process table.
-    proc* fproc = ptable[fpid] = reinterpret_cast<proc*>(kallocpage());
+    proc* fproc = ptable[fpid] = kalloc_proc();
     if (!fproc) {
         ptable_lock.unlock(irqs);
         return -1;
@@ -211,7 +211,7 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
     *fproc->regs_ = *ogregs;
 
     // 6. Enqueue the new process on some CPU’s run queue.
-    int cpu = fpid % ncpu;
+    int cpu = fproc->cpu_ = fpid % ncpu;
     cpus[cpu].runq_lock_.lock_noirq();
     cpus[cpu].enqueue(fproc);
     cpus[cpu].runq_lock_.unlock_noirq();
@@ -416,21 +416,8 @@ uintptr_t proc::syscall(regstate* regs) {
         int options = regs->reg_rsi;
 
         auto irqs = ptable_lock.lock();
-        // debug_printf("waitpid from pid %d on child pid %d, options %s W_NOHANG"
-        //              "\n", pid_, child_pid, options == W_NOHANG ? "=" : "!=");
-
-// #if DEBUG
-//         debug_printf("%d's dead children:", pid_);
-//         proc* _c = children_.front();
-//         if (!_c) debug_printf(" none");
-//         do {
-//             if (_c->state_ == proc::broken) {
-//                 debug_printf(" %d", _c->pid_);
-//             }
-//             _c = children_.next(_c);
-//         } while (_c);
-//         debug_printf("\n");
-// #endif
+        debug_printf("waitpid from pid %d on child pid %d, options %s W_NOHANG"
+                     "\n", pid_, child_pid, options == W_NOHANG ? "=" : "!=");
 
         pid_t parent_of_child = 0;
         if (ptable[child_pid]) {
@@ -446,7 +433,7 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
         else {
-            do {
+            while (true) {
                 irqs = ptable_lock.lock();
 
                 // wait for any child
@@ -468,8 +455,8 @@ uintptr_t proc::syscall(regstate* regs) {
                 ptable_lock.unlock(irqs);
                 if (to_reap || options == W_NOHANG)
                     break;
-                this->yield(); 
-            } while (true);
+                this->yield();
+            }
         }
         debug_printf("to_reap pid: %d\n", to_reap);
 

@@ -24,16 +24,18 @@ struct __attribute__((aligned(4096))) proc {
     regstate* regs_;                   // process's current registers
     yieldstate* yields_;               // process's current yield state
 
-    list_links runq_link_;             // for cpu run queue
-    list_links child_link_;            // for reparenting
+    list_links runq_links_;             // for cpu run queue
+    list_links child_links_;            // for reparenting
 
-    list<proc, &proc::child_link_> children_;   // procs st. ppid_ = this->pid_
+    list<proc, &proc::child_links_> children_;   // procs st. ppid_ = this->pid_
 
     enum state_t {
         blank = 0, runnable, blocked, broken, reapable
     };
     state_t state_;                    // process state
     x86_64_pagetable* pagetable_;      // process's page table
+
+    int cpu_;                          // index of cpu proc is running on
 
     pid_t ppid_;                       // parent process ID
 
@@ -58,11 +60,15 @@ struct __attribute__((aligned(4096))) proc {
     void yield_noreturn() __attribute__((noreturn));
     void resume() __attribute__((noreturn));
 
+    inline void wake();
+
     inline bool resumable() const;
 
  private:
     int load_segment(const elf_program* ph, const uint8_t* data);
 };
+
+#include "k-wait.hh"
 
 #define NPROC 16
 extern proc* ptable[NPROC];
@@ -84,7 +90,7 @@ struct __attribute__((aligned(4096))) cpustate {
     int index_;
     int lapic_id_;
 
-    list<proc, &proc::runq_link_> runq_;
+    list<proc, &proc::runq_links_> runq_;
     spinlock runq_lock_;
     unsigned long nschedule_;
     proc* idle_task_;
@@ -411,6 +417,17 @@ inline bool proc::contains(void* ptr) const {
 inline bool proc::contains(uintptr_t addr) const {
     uintptr_t delta = addr - reinterpret_cast<uintptr_t>(this);
     return delta <= KTASKSTACK_SIZE;
+}
+
+// proc::wake()
+//    Unblocks a process and re-enqueues it on its cpu
+inline void proc::wake() {
+    auto irqs = cpus[cpu_].runq_lock_.lock();
+    if (state_ == blocked) {
+        state_ = runnable;
+        cpus[cpu_].enqueue(this);
+    }
+    cpus[cpu_].runq_lock_.unlock(irqs);
 }
 
 // proc::resumable()
