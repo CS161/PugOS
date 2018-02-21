@@ -123,9 +123,10 @@ static inline pid_t sys_waitpid(pid_t pid,
                   :
                   : "cc", "rdx",
                     "r8", "r9", "r10", "r11");
-    pid_t r = rax;
-    if (status != nullptr) asm volatile("movl %%ecx,%0" : "=r" (*status));
-    return r;
+    if (rcx != (uintptr_t) nullptr) {
+        *status = rcx;
+    }
+    return rax;
 }
 
 // sys_panic(msg)

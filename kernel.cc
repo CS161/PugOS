@@ -415,11 +415,23 @@ uintptr_t proc::syscall(regstate* regs) {
         assert(child_pid < NPROC && child_pid >= 0);
         int options = regs->reg_rsi;
 
-        /* Instead of iterating through our process' children list to see if
-        the child_pid is one of its own, we check if the child's parent is
-        this process to be O(1) instead of O(C) where C is the number of
-        children. */
         auto irqs = ptable_lock.lock();
+        // debug_printf("waitpid from pid %d on child pid %d, options %s W_NOHANG"
+        //              "\n", pid_, child_pid, options == W_NOHANG ? "=" : "!=");
+
+// #if DEBUG
+//         debug_printf("%d's dead children:", pid_);
+//         proc* _c = children_.front();
+//         if (!_c) debug_printf(" none");
+//         do {
+//             if (_c->state_ == proc::broken) {
+//                 debug_printf(" %d", _c->pid_);
+//             }
+//             _c = children_.next(_c);
+//         } while (_c);
+//         debug_printf("\n");
+// #endif
+
         pid_t parent_of_child = 0;
         if (ptable[child_pid]) {
             parent_of_child = ptable[child_pid]->ppid_;
@@ -427,48 +439,51 @@ uintptr_t proc::syscall(regstate* regs) {
         ptable_lock.unlock(irqs);
 
         pid_t to_reap = 0;
-
-        if ((child_pid != 0 && pid_ != parent_of_child) ||
-            (child_pid == 0 && children_.empty())) {
-            debug_printf("Returning pid %d\n", E_CHILD);
+        if ((child_pid != 0 && pid_ != parent_of_child)
+            || (child_pid == 0 && children_.empty())) {
             r = E_CHILD;
-            break;
+            // debug_printf("returning E_CHILD r=%d\n", r);
         }
         else {
             do {
                 irqs = ptable_lock.lock();
 
+                // wait for any child
                 if (child_pid == 0) {
-                    // Finds any broken child
-                    for (auto c = children_.front(); c; c = children_.next(c)) {
-                        if (c->state_ == proc::broken) {
-                            to_reap = c->pid_;
-                            debug_printf("To reap: %d\n", to_reap);
+                    for (auto p = children_.front(); p; p = children_.next(p)) {
+                        if (p->state_ == proc::broken) {
+                            to_reap = p->pid_;
                             break;
                         }
                     }
                 }
-
+                // wait for a child (child_pid)
                 else {
                     if (ptable[child_pid]->state_ == proc::broken) {
-                        to_reap = child_pid;
+                        to_reap = ptable[child_pid]->pid_;
                     }
                 }
-                ptable_lock.unlock(irqs);
-                if (to_reap || options == W_NOHANG) break;
-                this->yield();
-            } while (1);
 
-            if (!to_reap && options == W_NOHANG) {
-                r = E_AGAIN;
-            }
-            else {
-                r = to_reap;
-                debug_printf("Returning pid %d\n", r);
-                int exit_status = process_reap(to_reap);
-                asm("movl %0, %%ecx;": : "r"(exit_status) : "ecx");
-            }
+                ptable_lock.unlock(irqs);
+                if (to_reap || options == W_NOHANG)
+                    break;
+                this->yield(); 
+            } while (true);
         }
+        // debug_printf("to_reap pid: %d\n", to_reap);
+
+        regs->reg_rcx = (uintptr_t) nullptr;
+        if (!to_reap && options == W_NOHANG && r != (uintptr_t) E_CHILD) {
+            r = E_AGAIN;
+            // debug_printf("returning E_AGAIN r=%d\n", r);
+        }
+        else {
+            int exit_status = process_reap(to_reap);
+            r = to_reap;
+        }
+
+        asm("movl %0, %%ecx;": : "r" (exit_status) : "ecx");
+
         break;
     }
 
