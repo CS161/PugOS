@@ -31,7 +31,7 @@ void kernel_start(const char* command) {
 
     auto irqs = ptable_lock.lock();
     process_setup(1, "p-init");
-    process_setup(2, "p-testwaitpid");
+    process_setup(2, "p-testzombie");
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
