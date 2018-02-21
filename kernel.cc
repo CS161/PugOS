@@ -442,7 +442,8 @@ uintptr_t proc::syscall(regstate* regs) {
         if ((child_pid != 0 && pid_ != parent_of_child)
             || (child_pid == 0 && children_.empty())) {
             r = E_CHILD;
-            // debug_printf("returning E_CHILD r=%d\n", r);
+            debug_printf("returning E_CHILD r=%d\n", r);
+            break;
         }
         else {
             do {
@@ -470,13 +471,14 @@ uintptr_t proc::syscall(regstate* regs) {
                 this->yield(); 
             } while (true);
         }
-        // debug_printf("to_reap pid: %d\n", to_reap);
+        debug_printf("to_reap pid: %d\n", to_reap);
 
         if (!to_reap && options == W_NOHANG && r != (uintptr_t) E_CHILD) {
             r = E_AGAIN;
-            // debug_printf("returning E_AGAIN r=%d\n", r);
+            debug_printf("returning E_AGAIN r=%d\n", r);
         }
         else {
+            debug_printf("returning pid %d\n", r);
             int exit_status = process_reap(to_reap);
             asm("movl %0, %%ecx;": : "r" (exit_status) : "ecx");
             r = to_reap;
