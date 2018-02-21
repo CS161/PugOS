@@ -229,7 +229,7 @@ int canary_value = rand();
 //    at the canary values. If the stack got too big and overwrote data, we will
 //    know because the saved canary values will have changed.
 
-static void check_corruption(proc* p) {
+void check_corruption(proc* p) {
     cpustate* c = &cpus[p->pid_ % ncpu];
     assert(p->canary_ == canary_value);
     assert(c->canary_ == canary_value);
@@ -472,16 +472,15 @@ uintptr_t proc::syscall(regstate* regs) {
         }
         // debug_printf("to_reap pid: %d\n", to_reap);
 
-        uintptr_t exit_status = (uintptr_t) nullptr;
         if (!to_reap && options == W_NOHANG && r != (uintptr_t) E_CHILD) {
             r = E_AGAIN;
             // debug_printf("returning E_AGAIN r=%d\n", r);
         }
         else {
-            exit_status = process_reap(to_reap);
+            int exit_status = process_reap(to_reap);
+            asm("movl %0, %%ecx;": : "r" (exit_status) : "ecx");
             r = to_reap;
         }
-        asm("movq %0, %%rcx;": : "r" (exit_status) : "rcx");
 
         break;
     }

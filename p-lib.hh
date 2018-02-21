@@ -123,7 +123,7 @@ static inline pid_t sys_waitpid(pid_t pid,
                   :
                   : "cc", "rdx",
                     "r8", "r9", "r10", "r11");
-    if (rcx != (uintptr_t) nullptr) {
+    if (status != nullptr) {
         *status = rcx;
     }
     return rax;
