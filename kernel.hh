@@ -423,7 +423,7 @@ inline bool proc::resumable() const {
     return regs_ || yields_;
 }
 
-#define DEBUG true
+#define DEBUG false
 #include "k-debug.hh"
 
 #endif

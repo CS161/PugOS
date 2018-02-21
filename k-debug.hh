@@ -11,8 +11,6 @@
 #define debug_pulse() \
     debug_printf("%s:%d pulse in %s\n", __FILE__, __LINE__, __FUNCTION__)
 
-#define DEBUG_LOCAL (debug_filter(__FILE__, __FUNC__);)
-
 inline constexpr size_t debug_hash(const char* str) {
     size_t result = 0;
     for (size_t i = 0; str[i] != '\0'; i++) {

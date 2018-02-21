@@ -114,13 +114,18 @@ static inline pid_t sys_getppid(void) {
 static inline pid_t sys_waitpid(pid_t pid,
                                 int* status = nullptr,
                                 int options = 0) {
-    pid_t r_pid = syscall0(SYSCALL_WAITPID, pid, options);
-    uintptr_t rcx;
-    asm volatile("movq %%rcx,%0" : "=r" (rcx));
-    if (rcx != (uintptr_t) nullptr) {
-        *status = rcx;
-    }
-    return r_pid;
+    register uintptr_t rax asm("rax") = SYSCALL_WAITPID;
+    register uintptr_t rdi asm("rdi") = pid;
+    register uintptr_t rsi asm("rsi") = options;
+    register uintptr_t rcx asm("rcx");
+    asm volatile ("syscall"
+                  : "+a" (rax), "+D" (rdi), "+S" (rsi), "=c" (rcx)
+                  :
+                  : "cc", "rdx",
+                    "r8", "r9", "r10", "r11");
+    pid_t r = rax;
+    if (status != nullptr) asm volatile("movl %%ecx,%0" : "=r" (*status));
+    return r;
 }
 
 // sys_panic(msg)
