@@ -472,17 +472,16 @@ uintptr_t proc::syscall(regstate* regs) {
         }
         // debug_printf("to_reap pid: %d\n", to_reap);
 
-        regs->reg_rcx = (uintptr_t) nullptr;
+        uintptr_t exit_status = (uintptr_t) nullptr;
         if (!to_reap && options == W_NOHANG && r != (uintptr_t) E_CHILD) {
             r = E_AGAIN;
             // debug_printf("returning E_AGAIN r=%d\n", r);
         }
         else {
-            int exit_status = process_reap(to_reap);
+            exit_status = process_reap(to_reap);
             r = to_reap;
         }
-
-        asm("movl %0, %%ecx;": : "r" (exit_status) : "ecx");
+        asm("movq %0, %%rcx;": : "r" (exit_status) : "rcx");
 
         break;
     }
