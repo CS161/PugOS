@@ -9,6 +9,8 @@
 volatile unsigned long ticks;   // # timer interrupts so far on CPU 0
 int kdisplay;                   // type of display
 
+static wait_queue waitpid_wq;   // waitqueue for sys_waitpid
+
 static void kdisplay_ontick();
 static void process_setup(pid_t pid, const char* program_name);
 
@@ -31,7 +33,7 @@ void kernel_start(const char* command) {
 
     auto irqs = ptable_lock.lock();
     process_setup(1, "p-init");
-    process_setup(2, "p-testzombie");
+    process_setup(2, "p-testwaitpid");
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
@@ -107,6 +109,11 @@ void process_exit(proc* p, int status = 0) {
     }
 
     p->state_ = proc::broken;
+    auto irqs = waitpid_wq.lock_.lock();
+    while (auto w = waitpid_wq.q_.pop_front()) {
+        w->p_->wake();
+    }
+    waitpid_wq.lock_.unlock(irqs);
 }
 
 
@@ -433,8 +440,10 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
         else {
+            waiter w(this);
             while (true) {
                 irqs = ptable_lock.lock();
+                w.prepare(&waitpid_wq);
 
                 // wait for any child
                 if (child_pid == 0) {
@@ -455,8 +464,10 @@ uintptr_t proc::syscall(regstate* regs) {
                 ptable_lock.unlock(irqs);
                 if (to_reap || options == W_NOHANG)
                     break;
-                this->yield();
+                
+                w.block();
             }
+            w.clear();
         }
         debug_printf("to_reap pid: %d\n", to_reap);
 
