@@ -78,8 +78,8 @@ inline void waiter::block() {
 
 inline void waiter::clear() {
     auto irqs = wq_->lock_.lock();
+    p_->state_ = proc::runnable;
     if (links_.is_linked()) {
-        p_->state_ = proc::runnable;
         wq_->q_.erase(this);
     }
     wq_->lock_.unlock(irqs);
