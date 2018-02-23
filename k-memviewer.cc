@@ -80,18 +80,21 @@ void memusage::refresh() {
         proc* p = ptable[pid];
         if (p) {
             mark(ka2pa(p), f_kernel | f_process(pid));
-        }
-        if (p && p->pagetable_ && p->pagetable_ != early_pagetable) {
-            for (ptiter it(p); it.low(); it.next()) {
-                mark(it.ptp_pa(), f_kernel | f_process(pid));
-            }
-            mark(ka2pa(p->pagetable_), f_kernel | f_process(pid));
 
-            for (vmiter it(p); it.low(); it.next()) {
-                if (it.user()) {
-                    mark(it.pa(), f_user | f_process(pid));
+            auto irqs = p->lock_pagetable_read();
+            if (p->pagetable_ && p->pagetable_ != early_pagetable) {
+                for (ptiter it(p); it.low(); it.next()) {
+                    mark(it.ptp_pa(), f_kernel | f_process(pid));
+                }
+                mark(ka2pa(p->pagetable_), f_kernel | f_process(pid));
+
+                for (vmiter it(p); it.low(); it.next()) {
+                    if (it.user()) {
+                        mark(it.pa(), f_user | f_process(pid));
+                    }
                 }
             }
+            p->unlock_pagetable_read(irqs);
         }
     }
 
@@ -182,7 +185,33 @@ static const char* state_string(const proc* p) {
     }
 }
 
-void console_memviewer(const proc* vmp) {
+static void console_memviewer_virtual(memusage& mu, proc* vmp) {
+    console_printf(CPOS(10, 18), 0x0F00,
+                   "VIRTUAL ADDRESS SPACE FOR %d; STATE %s\n", vmp->pid_,
+                   state_string(vmp));
+
+    for (vmiter it(vmp); it.va() < MEMSIZE_VIRTUAL; it += PAGESIZE) {
+        unsigned long pn = it.va() / PAGESIZE;
+        if (pn % 64 == 0) {
+            console_printf(CPOS(11 + pn / 64, 3), 0x0F00,
+                           "0x%06X ", it.va());
+        }
+        uint16_t ch;
+        if (!it.present()) {
+            ch = ' ';
+        } else {
+            ch = mu.symbol_at(it.pa());
+            if (it.user()) { // switch foreground & background colors
+                uint16_t z = (ch & 0x0F00) ^ ((ch & 0xF000) >> 4);
+                ch ^= z | (z << 4);
+            }
+        }
+        console[CPOS(11 + pn/64, 12 + pn%64)] = ch;
+    }
+}
+
+
+void console_memviewer(proc* vmp) {
     static memusage mu;
     mu.refresh();
     // must be called with `ptable_lock` held
@@ -200,30 +229,16 @@ void console_memviewer(const proc* vmp) {
     }
 
     // print virtual memory
-    if (vmp && vmp->pagetable_ && vmp->pagetable_ != early_pagetable) {
-        console_printf(CPOS(10, 18), 0x0F00,
-                       "VIRTUAL ADDRESS SPACE FOR %d; STATE %s\n", vmp->pid_,
-                       state_string(vmp));
-
-        for (vmiter it(vmp); it.va() < MEMSIZE_VIRTUAL; it += PAGESIZE) {
-            unsigned long pn = it.va() / PAGESIZE;
-            if (pn % 64 == 0) {
-                console_printf(CPOS(11 + pn / 64, 3), 0x0F00,
-                               "0x%06X ", it.va());
-            }
-            uint16_t ch;
-            if (!it.present()) {
-                ch = ' ';
-            } else {
-                ch = mu.symbol_at(it.pa());
-                if (it.user()) { // switch foreground & background colors
-                    uint16_t z = (ch & 0x0F00) ^ ((ch & 0xF000) >> 4);
-                    ch ^= z | (z << 4);
-                }
-            }
-            console[CPOS(11 + pn/64, 12 + pn%64)] = ch;
+    bool need_clear = true;
+    if (vmp) {
+        auto irqs = vmp->lock_pagetable_read();
+        if (vmp->pagetable_ && vmp->pagetable_ != early_pagetable) {
+            console_memviewer_virtual(mu, vmp);
+            need_clear = false;
         }
-    } else {
+        vmp->unlock_pagetable_read(irqs);
+    }
+    if (need_clear) {
         console_printf(CPOS(10, 0), 0x0F00, "\n\n\n\n\n\n\n\n\n\n");
     }
 }

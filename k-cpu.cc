@@ -113,7 +113,9 @@ void annihilate(proc* p) {
 
 void cpustate::enqueue(proc* p) {
     assert(p->resumable() || p->state_ != proc::runnable);
-    runq_.push_back(p);
+    if (!p->runq_links_.is_linked()) {
+        runq_.push_back(p);
+    }
 }
 
 

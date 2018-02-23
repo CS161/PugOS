@@ -30,7 +30,7 @@ struct __attribute__((aligned(4096))) proc {
     list<proc, &proc::child_links_> children_;   // procs st. ppid_ = this->pid_
 
     enum state_t {
-        blank = 0, runnable, blocked, broken, reapable
+        blank = 0, runnable, blocked, broken
     };
     state_t state_;                    // process state
     x86_64_pagetable* pagetable_;      // process's page table
@@ -64,6 +64,8 @@ struct __attribute__((aligned(4096))) proc {
 
     inline bool resumable() const;
 
+    inline irqstate lock_pagetable_read();
+    inline void unlock_pagetable_read(irqstate& irqs);
  private:
     int load_segment(const elf_program* ph, const uint8_t* data);
 };
@@ -438,6 +440,16 @@ inline bool proc::resumable() const {
     assert(!regs_ || contains(regs_));      // `regs_` points within this
     assert(!yields_ || contains(yields_));  // same for `yields_`
     return regs_ || yields_;
+}
+
+// proc::lock_pagetable_read()
+//    Obtain a “read lock” on this process’s page table. While the “read
+//    lock” is held, it is illegal to remove or change existing valid
+//    mappings in that page table, or to free page table pages.
+inline irqstate proc::lock_pagetable_read() {
+    return irqstate();
+}
+inline void proc::unlock_pagetable_read(irqstate&) {
 }
 
 #define DEBUG false
