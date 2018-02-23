@@ -10,6 +10,7 @@ volatile unsigned long ticks;   // # timer interrupts so far on CPU 0
 int kdisplay;                   // type of display
 
 static wait_queue waitpid_wq;   // waitqueue for sys_waitpid
+static wait_queue msleep_wq;    // waitqueue for sys_msleep
 
 static void kdisplay_ontick();
 static void process_setup(pid_t pid, const char* program_name);
@@ -33,7 +34,7 @@ void kernel_start(const char* command) {
 
     auto irqs = ptable_lock.lock();
     process_setup(1, "p-init");
-    process_setup(2, "p-testwaitpid");
+    process_setup(2, "p-testmsleep");
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
@@ -286,6 +287,11 @@ void proc::exception(regstate* regs) {
         if (cpu->index_ == 0) {
             ++ticks;
             kdisplay_ontick();
+            auto irqs = msleep_wq.lock_.lock();
+            while (auto w = msleep_wq.q_.pop_front()) {
+                w->p_->wake();
+            }
+            msleep_wq.lock_.unlock(irqs);
         }
         lapicstate::get().ack();
         this->regs_ = regs;
@@ -406,9 +412,15 @@ uintptr_t proc::syscall(regstate* regs) {
 
     case SYSCALL_MSLEEP: {
         unsigned long end = ticks + (regs->reg_rdi + 9) / 10;
-        while ((long) (end - ticks) > 0) {
-            this->yield();
+        waiter w(this);
+        while (true) {
+            w.prepare(&msleep_wq);
+            if ((long) (end - ticks) <= 0)
+                break;
+            w.block();
         }
+        w.clear();
+
         r = 0;
         break;
     }
