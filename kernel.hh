@@ -82,6 +82,8 @@ extern int canary_value;
 // allocate a new `proc` and call its constructor
 proc* kalloc_proc();
 
+const char* state_string(const proc* p);
+
 // CPU state type
 struct __attribute__((aligned(4096))) cpustate {
     // These three members must come first:
@@ -363,6 +365,9 @@ void log_vprintf(const char* format, va_list val) __attribute__((noinline));
 void debug_printf_(const char* file, const char* func, int line,
                           const char* format, ...);
 
+#define DEBUG false
+#include "k-debug.hh"
+
 // log_backtrace
 //    Print a backtrace to the host's `log.txt` file.
 void log_backtrace(const char* prefix = "");
@@ -427,6 +432,8 @@ inline void proc::wake() {
     auto irqs = cpus[cpu_].runq_lock_.lock();
     if (state_ == blocked) {
         state_ = runnable;
+        debug_printf("proc::wake enqueueing pid %d, %sresumable\n", pid_,
+            resumable() ? "" : "not ");
         cpus[cpu_].enqueue(this);
     }
     cpus[cpu_].runq_lock_.unlock(irqs);
@@ -451,8 +458,5 @@ inline irqstate proc::lock_pagetable_read() {
 }
 inline void proc::unlock_pagetable_read(irqstate&) {
 }
-
-#define DEBUG false
-#include "k-debug.hh"
 
 #endif

@@ -7,6 +7,7 @@
 //    This is the kernel.
 
 volatile unsigned long ticks;   // # timer interrupts so far on CPU 0
+timer_wheel msleep_wheel;       // timer wheel to wake on ticks
 int kdisplay;                   // type of display
 
 static wait_queue waitpid_wq;   // waitqueue for sys_waitpid
@@ -79,39 +80,48 @@ void process_setup(pid_t pid, const char* name) {
 
     int cpu = p->cpu_ = pid % ncpu;
     cpus[cpu].runq_lock_.lock_noirq();
+    debug_printf("process_setup enqueueing pid %d\n", p->pid_);
     cpus[cpu].enqueue(p);
     cpus[cpu].runq_lock_.unlock_noirq();
 }
 
 
 void process_exit(proc* p, int status = 0) {
+    debug_printf("exiting pid %d\n", p->pid_);
     p->exit_status_ = status;
 
     // free virtual memory
     for (vmiter vmit(p); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
         if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
-            debug_printf("virtual mem: freeing va %p\n", vmit.va());
+            // debug_printf("virtual mem: freeing va %p\n", vmit.va());
 
             kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
         }
     }
 
     // free pagetables
-    debug_printf("freeing l3-1 pagetables:\n");
+    // debug_printf("freeing l3-1 pagetables:\n");
     for (ptiter ptit(p, 0); ptit.low(); ptit.next()) {
         // debug_printf("\t\tpa=%p\n", ptit.ptp_pa());
         // if (ptit.ptp_pa() % PAGESIZE != 0) {
-        debug_printf("FREE PAGETABLE: ");
-        debug_printf("pid %d ", p->pid_);
-        debug_printf("pa %p ", ptit.ptp_pa());
-        debug_printf("va %p\n", ptit.va());
+        // debug_printf("FREE PAGETABLE: ");
+        // debug_printf("pid %d ", p->pid_);
+        // debug_printf("pa %p ", ptit.ptp_pa());
+        // debug_printf("va %p\n", ptit.va());
         // }
         kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
     }
 
     p->state_ = proc::broken;
     auto irqs = waitpid_wq.lock_.lock();
+    // for (auto w = waitpid_wq.q_.front(); w; w = waitpid_wq.q_.next(w)) {
+    //     if (w->p_->resumable()) {
+    //         waitpid_wq.q_.erase(w);
+    //         w->p_->wake();
+    //     }
+    // }
     while (auto w = waitpid_wq.q_.pop_front()) {
+        debug_printf("process_exit waking pid %d\n", w->p_->pid_);
         w->p_->wake();
     }
     waitpid_wq.lock_.unlock(irqs);
@@ -221,6 +231,7 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
     // 6. Enqueue the new process on some CPU’s run queue.
     int cpu = fproc->cpu_ = fpid % ncpu;
     cpus[cpu].runq_lock_.lock_noirq();
+    debug_printf("process_fork enqueueing pid %d\n", fproc->pid_);
     cpus[cpu].enqueue(fproc);
     cpus[cpu].runq_lock_.unlock_noirq();
 
@@ -289,6 +300,7 @@ void proc::exception(regstate* regs) {
             kdisplay_ontick();
             auto irqs = msleep_wq.lock_.lock();
             while (auto w = msleep_wq.q_.pop_front()) {
+                debug_printf("timer interrupt waking pid %d\n", w->p_->pid_);
                 w->p_->wake();
             }
             msleep_wq.lock_.unlock(irqs);
@@ -414,6 +426,7 @@ uintptr_t proc::syscall(regstate* regs) {
         unsigned long end = ticks + (regs->reg_rdi + 9) / 10;
         waiter w(this);
         while (true) {
+            debug_printf("msleep preparing on pid %d\n", pid_);
             w.prepare(&msleep_wq);
             if ((long) (end - ticks) <= 0)
                 break;
@@ -421,6 +434,9 @@ uintptr_t proc::syscall(regstate* regs) {
         }
         w.clear();
 
+        // while ((long) (end - ticks) > 0) {
+        //     yield();
+        // }
         r = 0;
         break;
     }
@@ -455,6 +471,7 @@ uintptr_t proc::syscall(regstate* regs) {
             waiter w(this);
             while (true) {
                 irqs = ptable_lock.lock();
+                debug_printf("waitpid preparing on pid %d\n", pid_);
                 w.prepare(&waitpid_wq);
 
                 // wait for any child

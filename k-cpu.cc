@@ -112,6 +112,11 @@ void annihilate(proc* p) {
 //    runnable), and `this->runq_lock_` must be held.
 
 void cpustate::enqueue(proc* p) {
+    if (!(p->resumable() || p->state_ != proc::runnable)) {
+        debug_printf("Bad enqueue: pid %d on cpu %d, state %s, %sresumable\n",
+            p->pid_, lapic_id_, state_string(p), p->resumable() ? "" : "not ");
+    }
+
     assert(p->resumable() || p->state_ != proc::runnable);
     if (!p->runq_links_.is_linked()) {
         runq_.push_back(p);

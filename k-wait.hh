@@ -4,10 +4,17 @@
 #include "k-list.hh"
 struct wait_queue;
 
+void debug_printf_(const char* file, const char* func, int line,
+                          const char* format, ...);
+const char* state_string(const proc* p);
+
 struct waiter {
     proc* p_;
     wait_queue* wq_;
     list_links links_;
+
+    // used only in timer wheels
+    unsigned long expire_time_;
 
     inline waiter(proc* p);
     inline ~waiter();
@@ -24,6 +31,19 @@ struct wait_queue {
 
     // you might want to provide some convenience methods here
 };
+
+
+static const unsigned NSLOTS = (1 << 6);
+struct timer_wheel {
+    wait_queue slots_[NSLOTS];
+    size_t index_;
+
+    inline void start_timer(waiter w, unsigned long end_time);
+    inline void stop_timer(waiter w);
+    inline void tick();
+};
+
+
 
 
 inline waiter::waiter(proc* p)
@@ -47,6 +67,8 @@ inline waiter::~waiter() {
 inline void waiter::prepare(wait_queue* wq) {
     wq_ = wq;
     auto irqs = wq_->lock_.lock();
+    // debug_printf_(__FILE__, __FUNCTION__, __LINE__,
+    //     "waiter::prepare pid %d\n", p_->pid_);
     p_->state_ = proc::blocked;
     wq_->q_.push_back(this);
     wq_->lock_.unlock(irqs);
@@ -62,6 +84,8 @@ inline void waiter::prepare(wait_queue* wq) {
 //      waiter.
 
 inline void waiter::block() {
+    // debug_printf_(__FILE__, __FUNCTION__, __LINE__,
+    //     "blocking pid %d\n", p_->pid_);
     p_->yield();
     clear();
 }
@@ -78,6 +102,8 @@ inline void waiter::block() {
 
 inline void waiter::clear() {
     auto irqs = wq_->lock_.lock();
+    // debug_printf_(__FILE__, __FUNCTION__, __LINE__,
+    //     "waiter::clear pid %d\n", p_->pid_);
     p_->state_ = proc::runnable;
     if (links_.is_linked()) {
         wq_->q_.erase(this);
@@ -92,6 +118,9 @@ inline void waiter::clear() {
 inline void waiter::wake() {
     auto irqs = wq_->lock_.lock();
     while (auto w = wq_->q_.pop_front()) {
+        // debug_printf_(__FILE__, __FUNCTION__, __LINE__,
+        //     "waiter::wake pid %d, state %s, %sresumable\n",
+        //     w->p_->pid_, state_string(w->p_), w->p_->resumable() ? "" : "not ");
         w->p_->wake();
     }
     wq_->lock_.unlock(irqs);

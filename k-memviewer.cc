@@ -168,22 +168,6 @@ uint16_t memusage::symbol_at(uintptr_t pa) const {
     }
 }
 
-static const char* sstring_null = "NULL";
-static const char* sstring_blank = "BLANK";
-static const char* sstring_broken = "BROKEN";
-static const char* sstring_blocked = "BLOCKED";
-static const char* sstring_runnable = "RUNNABLE";
-static const char* sstring_unknown = "UNKNOWN";
-static const char* state_string(const proc* p) {
-    if (!p) return sstring_null;
-    switch (p->state_) {
-        case proc::blank: return sstring_blank;
-        case proc::broken: return sstring_broken;
-        case proc::blocked: return sstring_blocked;
-        case proc::runnable: return sstring_runnable;
-        default: return sstring_unknown;
-    }
-}
 
 static void console_memviewer_virtual(memusage& mu, proc* vmp) {
     console_printf(CPOS(10, 18), 0x0F00,

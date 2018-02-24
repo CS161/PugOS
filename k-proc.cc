@@ -29,6 +29,25 @@ proc* kalloc_proc() {
 }
 
 
+// helper function to print a proc state
+static const char* sstring_null = "NULL";
+static const char* sstring_blank = "BLANK";
+static const char* sstring_broken = "BROKEN";
+static const char* sstring_blocked = "BLOCKED";
+static const char* sstring_runnable = "RUNNABLE";
+static const char* sstring_unknown = "UNKNOWN";
+const char* state_string(const proc* p) {
+    if (!p) return sstring_null;
+    switch (p->state_) {
+        case proc::blank: return sstring_blank;
+        case proc::broken: return sstring_broken;
+        case proc::blocked: return sstring_blocked;
+        case proc::runnable: return sstring_runnable;
+        default: return sstring_unknown;
+    }
+}
+
+
 // proc::init_user(pid, pt)
 //    Initialize this `proc` as a new runnable user process with PID `pid`
 //    and initial page table `pt`.
