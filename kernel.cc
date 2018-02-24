@@ -92,22 +92,12 @@ void process_exit(proc* p, int status = 0) {
     // free virtual memory
     for (vmiter vmit(p); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
         if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
-            // debug_printf("virtual mem: freeing va %p\n", vmit.va());
-
             kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
         }
     }
 
     // free pagetables
-    // debug_printf("freeing l3-1 pagetables:\n");
     for (ptiter ptit(p, 0); ptit.low(); ptit.next()) {
-        // debug_printf("\t\tpa=%p\n", ptit.ptp_pa());
-        // if (ptit.ptp_pa() % PAGESIZE != 0) {
-        // debug_printf("FREE PAGETABLE: ");
-        // debug_printf("pid %d ", p->pid_);
-        // debug_printf("pa %p ", ptit.ptp_pa());
-        // debug_printf("va %p\n", ptit.va());
-        // }
         kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
     }
 
@@ -303,13 +293,6 @@ void proc::exception(regstate* regs) {
                 sleep_wheel.wqs_[ticks % WHEEL_SPOKES].q_.front()->wake();
             }
             kdisplay_ontick();
-
-            // auto irqs = msleep_wq.lock_.lock();
-            // while (auto w = msleep_wq.q_.pop_front()) {
-            //     debug_printf("timer interrupt waking pid %d\n", w->p_->pid_);
-            //     w->p_->wake();
-            // }
-            // msleep_wq.lock_.unlock(irqs);
         }
         lapicstate::get().ack();
         this->regs_ = regs;
@@ -442,9 +425,7 @@ uintptr_t proc::syscall(regstate* regs) {
         w.clear();
 
         debug_printf("resumes: %d\n", resumes);
-        // while ((long) (end - ticks) > 0) {
-        //     yield();
-        // }
+
         if (interrupted_)
             r = E_INTR;
         else

@@ -367,7 +367,7 @@ void log_vprintf(const char* format, va_list val) __attribute__((noinline));
 void debug_printf_(const char* file, const char* func, int line,
                           const char* format, ...);
 
-#define DEBUG true
+#define DEBUG false
 #include "k-debug.hh"
 
 // log_backtrace
