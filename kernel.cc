@@ -434,8 +434,6 @@ uintptr_t proc::syscall(regstate* regs) {
         waiter w(this);
         auto wq = &sleep_wheel.wqs_[end % WHEEL_SPOKES];
         while (true) {
-            debug_printf("msleep preparing on pid %d\n", pid_);
-            if (interrupted_) debug_printf("INTERRUPTED!\n");
             w.prepare(wq);
             if ((long) (end - ticks) <= 0 || interrupted_)
                 break;

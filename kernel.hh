@@ -367,7 +367,7 @@ void log_vprintf(const char* format, va_list val) __attribute__((noinline));
 void debug_printf_(const char* file, const char* func, int line,
                           const char* format, ...);
 
-#define DEBUG false
+#define DEBUG true
 #include "k-debug.hh"
 
 // log_backtrace
@@ -434,8 +434,6 @@ inline void proc::wake() {
     auto irqs = cpus[cpu_].runq_lock_.lock();
     if (state_ == blocked && resumable()) {
         state_ = runnable;
-        debug_printf("proc::wake enqueueing pid %d, %sresumable\n", pid_,
-            resumable() ? "" : "not ");
         cpus[cpu_].enqueue(this);
     }
     cpus[cpu_].runq_lock_.unlock(irqs);
