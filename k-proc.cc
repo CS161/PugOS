@@ -12,7 +12,7 @@ spinlock ptable_lock;
 
 proc::proc()
     : pid_(0), regs_(nullptr), yields_(nullptr),
-      state_(blank), pagetable_(nullptr) {
+      state_(blank), pagetable_(nullptr), interrupted_(false) {
 }
 
 

@@ -35,7 +35,7 @@ void kernel_start(const char* command) {
 
     auto irqs = ptable_lock.lock();
     process_setup(1, "p-init");
-    process_setup(2, "p-testmsleep");
+    process_setup(2, "p-testeintr");
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
@@ -113,13 +113,15 @@ void process_exit(proc* p, int status = 0) {
     }
 
     p->state_ = proc::broken;
-    auto irqs = waitpid_wq.lock_.lock();
-    // for (auto w = waitpid_wq.q_.front(); w; w = waitpid_wq.q_.next(w)) {
-    //     if (w->p_->resumable()) {
-    //         waitpid_wq.q_.erase(w);
-    //         w->p_->wake();
-    //     }
-    // }
+
+    auto irqs = ptable_lock.lock();
+    if (ptable[p->ppid_]->state_ == proc::blocked) {
+        ptable[p->ppid_]->interrupted_ = true;
+        ptable[p->ppid_]->wake();
+    }
+    ptable_lock.unlock(irqs);
+
+    irqs = waitpid_wq.lock_.lock();
     while (auto w = waitpid_wq.q_.pop_front()) {
         debug_printf("process_exit waking pid %d\n", w->p_->pid_);
         w->p_->wake();
@@ -297,13 +299,17 @@ void proc::exception(regstate* regs) {
         cpustate* cpu = this_cpu();
         if (cpu->index_ == 0) {
             ++ticks;
-            kdisplay_ontick();
-            auto irqs = msleep_wq.lock_.lock();
-            while (auto w = msleep_wq.q_.pop_front()) {
-                debug_printf("timer interrupt waking pid %d\n", w->p_->pid_);
-                w->p_->wake();
+            if (!msleep_wheel.slots_[ticks % NSLOTS].q_.empty()) {
+                msleep_wheel.slots_[ticks % NSLOTS].q_.front()->wake();
             }
-            msleep_wq.lock_.unlock(irqs);
+            kdisplay_ontick();
+
+            // auto irqs = msleep_wq.lock_.lock();
+            // while (auto w = msleep_wq.q_.pop_front()) {
+            //     debug_printf("timer interrupt waking pid %d\n", w->p_->pid_);
+            //     w->p_->wake();
+            // }
+            // msleep_wq.lock_.unlock(irqs);
         }
         lapicstate::get().ack();
         this->regs_ = regs;
@@ -425,19 +431,24 @@ uintptr_t proc::syscall(regstate* regs) {
     case SYSCALL_MSLEEP: {
         unsigned long end = ticks + (regs->reg_rdi + 9) / 10;
         waiter w(this);
+        auto wq = &msleep_wheel.slots_[end % NSLOTS];
         while (true) {
             debug_printf("msleep preparing on pid %d\n", pid_);
-            w.prepare(&msleep_wq);
-            if ((long) (end - ticks) <= 0)
+            w.prepare(wq);
+            if ((long) (end - ticks) <= 0 || interrupted_)
                 break;
             w.block();
         }
         w.clear();
 
+        debug_printf("resumes: %d\n", resumes);
         // while ((long) (end - ticks) > 0) {
         //     yield();
         // }
-        r = 0;
+        if (interrupted_)
+            r = E_INTR;
+        else
+            r = 0;
         break;
     }
 

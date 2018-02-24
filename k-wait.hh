@@ -7,14 +7,12 @@ struct wait_queue;
 void debug_printf_(const char* file, const char* func, int line,
                           const char* format, ...);
 const char* state_string(const proc* p);
+extern volatile unsigned long ticks;
 
 struct waiter {
     proc* p_;
     wait_queue* wq_;
     list_links links_;
-
-    // used only in timer wheels
-    unsigned long expire_time_;
 
     inline waiter(proc* p);
     inline ~waiter();
@@ -33,17 +31,10 @@ struct wait_queue {
 };
 
 
-static const unsigned NSLOTS = (1 << 6);
+static const unsigned NSLOTS = 8;
 struct timer_wheel {
     wait_queue slots_[NSLOTS];
-    size_t index_;
-
-    inline void start_timer(waiter w, unsigned long end_time);
-    inline void stop_timer(waiter w);
-    inline void tick();
 };
-
-
 
 
 inline waiter::waiter(proc* p)
@@ -86,6 +77,7 @@ inline void waiter::prepare(wait_queue* wq) {
 inline void waiter::block() {
     // debug_printf_(__FILE__, __FUNCTION__, __LINE__,
     //     "blocking pid %d\n", p_->pid_);
+    p_->interrupted_ = false;
     p_->yield();
     clear();
 }

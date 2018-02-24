@@ -4,6 +4,8 @@
 cpustate cpus[NCPU];
 int ncpu;
 
+unsigned long resumes = 0;
+
 
 // cpustate::init()
 //    Initialize a `cpustate`. Should be called once per active CPU,
@@ -174,6 +176,7 @@ void cpustate::schedule(proc* yielding_from) {
             && current_->state_ == proc::runnable
             && current_ != yielding_from) {
             set_pagetable(current_->pagetable_);
+            resumes++;
             current_->resume();
         }
 

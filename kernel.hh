@@ -16,6 +16,7 @@ struct yieldstate;
 //
 //    Functions, constants, and definitions for the kernel.
 
+extern unsigned long resumes;
 
 // Process descriptor type
 struct __attribute__((aligned(4096))) proc {
@@ -40,6 +41,7 @@ struct __attribute__((aligned(4096))) proc {
     pid_t ppid_;                       // parent process ID
 
     int exit_status_;
+    bool interrupted_;
 
     int canary_;
 
@@ -430,7 +432,7 @@ inline bool proc::contains(uintptr_t addr) const {
 //    Unblocks a process and re-enqueues it on its cpu
 inline void proc::wake() {
     auto irqs = cpus[cpu_].runq_lock_.lock();
-    if (state_ == blocked) {
+    if (state_ == blocked && resumable()) {
         state_ = runnable;
         debug_printf("proc::wake enqueueing pid %d, %sresumable\n", pid_,
             resumable() ? "" : "not ");
