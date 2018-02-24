@@ -7,11 +7,10 @@
 //    This is the kernel.
 
 volatile unsigned long ticks;   // # timer interrupts so far on CPU 0
-timer_wheel msleep_wheel;       // timer wheel to wake on ticks
+timing_wheel sleep_wheel;       // timer wheel to wake on ticks
 int kdisplay;                   // type of display
 
 static wait_queue waitpid_wq;   // waitqueue for sys_waitpid
-static wait_queue msleep_wq;    // waitqueue for sys_msleep
 
 static void kdisplay_ontick();
 static void process_setup(pid_t pid, const char* program_name);
@@ -112,12 +111,11 @@ void process_exit(proc* p, int status = 0) {
         kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
     }
 
-    p->state_ = proc::broken;
-
     auto irqs = ptable_lock.lock();
-    if (ptable[p->ppid_]->state_ == proc::blocked) {
-        ptable[p->ppid_]->interrupted_ = true;
-        ptable[p->ppid_]->wake();
+    auto daddy = ptable[p->ppid_];
+    if (daddy->state_ == proc::blocked) {
+        daddy->interrupted_ = true;
+        daddy->wake();
     }
     ptable_lock.unlock(irqs);
 
@@ -127,6 +125,8 @@ void process_exit(proc* p, int status = 0) {
         w->p_->wake();
     }
     waitpid_wq.lock_.unlock(irqs);
+
+    p->state_ = proc::broken;
 }
 
 
@@ -299,8 +299,8 @@ void proc::exception(regstate* regs) {
         cpustate* cpu = this_cpu();
         if (cpu->index_ == 0) {
             ++ticks;
-            if (!msleep_wheel.slots_[ticks % NSLOTS].q_.empty()) {
-                msleep_wheel.slots_[ticks % NSLOTS].q_.front()->wake();
+            if (!sleep_wheel.wqs_[ticks % WHEEL_SPOKES].q_.empty()) {
+                sleep_wheel.wqs_[ticks % WHEEL_SPOKES].q_.front()->wake();
             }
             kdisplay_ontick();
 
@@ -430,10 +430,12 @@ uintptr_t proc::syscall(regstate* regs) {
 
     case SYSCALL_MSLEEP: {
         unsigned long end = ticks + (regs->reg_rdi + 9) / 10;
+        interrupted_ = false;
         waiter w(this);
-        auto wq = &msleep_wheel.slots_[end % NSLOTS];
+        auto wq = &sleep_wheel.wqs_[end % WHEEL_SPOKES];
         while (true) {
             debug_printf("msleep preparing on pid %d\n", pid_);
+            if (interrupted_) debug_printf("INTERRUPTED!\n");
             w.prepare(wq);
             if ((long) (end - ticks) <= 0 || interrupted_)
                 break;

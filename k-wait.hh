@@ -31,9 +31,9 @@ struct wait_queue {
 };
 
 
-static const unsigned NSLOTS = 8;
-struct timer_wheel {
-    wait_queue slots_[NSLOTS];
+static const unsigned WHEEL_SPOKES = 8;
+struct timing_wheel {
+    wait_queue wqs_[WHEEL_SPOKES];
 };
 
 
@@ -77,7 +77,6 @@ inline void waiter::prepare(wait_queue* wq) {
 inline void waiter::block() {
     // debug_printf_(__FILE__, __FUNCTION__, __LINE__,
     //     "blocking pid %d\n", p_->pid_);
-    p_->interrupted_ = false;
     p_->yield();
     clear();
 }
