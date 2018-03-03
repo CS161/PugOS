@@ -522,6 +522,7 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
+        // verify inputs are valid
         if (addr + sz > VA_LOWEND
             || addr > VA_HIGHMAX - sz
             || !vmiter(this, addr).check_range(sz, PTE_P | PTE_U | PTE_W)) {
@@ -575,6 +576,7 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
+        // verify inputs are valid
         if (addr + sz > VA_LOWEND
             || addr > VA_HIGHMAX - sz
             || !vmiter(this, addr).check_range(sz, PTE_P | PTE_U)) {
