@@ -1,6 +1,7 @@
 #ifndef CHICKADEE_LIB_HH
 #define CHICKADEE_LIB_HH
 #include "types.h"
+#include <new>              // for placement new
 #include <type_traits>
 
 // lib.hh
@@ -31,7 +32,9 @@ int rand(int min, int max);
 
 
 // Return the offset of `member` relative to the beginning of a struct type
+#ifndef offsetof
 #define offsetof(type, member)  __builtin_offsetof(type, member)
+#endif
 
 // Return the number of elements in an array
 #define arraysize(array)        (sizeof(array) / sizeof(array[0]))
@@ -123,18 +126,39 @@ inline constexpr T roundup_pow2(T x) {
 #define SYSCALL_WAITPID         11
 #define SYSCALL_COMMIT_SEPPUKU  44
 #define SYSCALL_KDISPLAY        100
+#define SYSCALL_READ            101
+#define SYSCALL_WRITE           102
+#define SYSCALL_CLOSE           103
+#define SYSCALL_DUP2            104
+#define SYSCALL_PIPE            105
+#define SYSCALL_EXECV           106
 
 
 // System call error return values
 
 #define E_AGAIN         -11        // Try again
+#define E_BADF          -9         // Bad file number
 #define E_CHILD         -10        // No child processes
+#define E_FAULT         -14        // Bad address
 #define E_INTR          -4         // Interrupted system call
 #define E_INVAL         -22        // Invalid argument
+#define E_IO            -5         // I/O error
+#define E_MFILE         -24        // Too many open files
+#define E_NFILE         -23        // File table overflow
+#define E_NOEXEC        -8         // Exec format error
 #define E_NOMEM         -12        // Out of memory
 #define E_NOSYS         -38        // Invalid system call number
+#define E_NXIO          -6         // No such device or address
 #define E_PERM          -1         // Operation not permitted
+#define E_PIPE          -32        // Broken pipe
 #define E_SRCH          -3         // No such process
+#define E_2BIG          -7         // Argument list too long
+
+#define E_MINERROR      -100
+
+inline bool is_error(uintptr_t r) {
+    return r >= static_cast<uintptr_t>(E_MINERROR);
+}
 
 
 // System call constants

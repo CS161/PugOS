@@ -1,5 +1,5 @@
-#ifndef CHICKADEE_KERNEL_H
-#define CHICKADEE_KERNEL_H
+#ifndef CHICKADEE_KERNEL_HH
+#define CHICKADEE_KERNEL_HH
 #include "x86-64.h"
 #include "lib.hh"
 #include "k-list.hh"
@@ -12,7 +12,8 @@ struct elf_program;
 struct proc;
 struct yieldstate;
 
-// kernel.h
+
+// kernel.hh
 //
 //    Functions, constants, and definitions for the kernel.
 
@@ -121,6 +122,9 @@ struct __attribute__((aligned(4096))) cpustate {
 
     void enqueue(proc* p);
     void schedule(proc* yielding_from) __attribute__((noreturn));
+
+    void enable_irq(int irqno);
+    void disable_irq(int irqno);
 
  private:
     void init_cpu_hardware();
@@ -284,6 +288,50 @@ void* kalloc(size_t sz);
 //    `kalloc_pagetable`. Does nothing if `ptr == nullptr`.
 void kfree(void* ptr);
 
+// knew<T>()
+//    Return a pointer to a newly-allocated object of type `T`. Calls
+//    the new object's constructor. Returns `nullptr` on failure.
+template <typename T>
+inline T* knew() {
+    if (void* mem = kalloc(sizeof(T))) {
+        return new (mem) T;
+    } else {
+        return nullptr;
+    }
+}
+
+// kdelete(ptr)
+//    Free an object allocated by `knew`. Calls the object's destructor.
+template <typename T>
+void kdelete(T* obj) {
+    if (obj) {
+        obj->~T();
+        kfree(obj);
+    }
+}
+
+// operator new, operator delete
+//    Expressions like `new (std::nothrow) T(...)` and `delete x` work,
+//    and call kalloc/kfree.
+inline void* operator new(size_t sz, const std::nothrow_t&) noexcept {
+    return kalloc(sz);
+}
+inline void* operator new[](size_t sz, const std::nothrow_t&) noexcept {
+    return kalloc(sz);
+}
+inline void operator delete(void* ptr) noexcept {
+    kfree(ptr);
+}
+inline void operator delete(void* ptr, size_t) noexcept {
+    kfree(ptr);
+}
+inline void operator delete[](void* ptr) noexcept {
+    kfree(ptr);
+}
+inline void operator delete[](void* ptr, size_t) noexcept {
+    kfree(ptr);
+}
+
 // init_kalloc
 //    Initialize stuff needed by `kalloc`. Called from `init_hardware`,
 //    after `physical_ranges` is initialized.
@@ -324,33 +372,6 @@ void kernel_start(const char* command);
 void console_show_cursor(int cpos);
 
 
-// keyboard_readc
-//    Read a character from the keyboard. Returns -1 if there is no character
-//    to read, and 0 if no real key press was registered but you should call
-//    keyboard_readc() again (e.g. the user pressed a SHIFT key). Otherwise
-//    returns either an ASCII character code or one of the special characters
-//    listed below.
-int keyboard_readc();
-
-#define KEY_UP          0300
-#define KEY_RIGHT       0301
-#define KEY_DOWN        0302
-#define KEY_LEFT        0303
-#define KEY_HOME        0304
-#define KEY_END         0305
-#define KEY_PAGEUP      0306
-#define KEY_PAGEDOWN    0307
-#define KEY_INSERT      0310
-#define KEY_DELETE      0311
-
-// check_keyboard
-//    Check for the user typing a control key. 'a', 'f', and 'e' cause a soft
-//    reboot where the kernel runs the allocator programs, "fork", or
-//    "forkexit", respectively. Control-C or 'q' exit the virtual machine.
-//    Returns key typed or -1 for no key.
-int check_keyboard();
-
-
 // program_load(p, programnumber)
 //    Load the code corresponding to program `programnumber` into the process
 //    `p` and set `p->p_reg.reg_eip` to its entry point. Calls
@@ -367,7 +388,7 @@ void log_vprintf(const char* format, va_list val) __attribute__((noinline));
 void debug_printf_(const char* file, const char* func, int line,
                           const char* format, ...);
 
-#define DEBUG false
+#define DEBUG true
 #include "k-debug.hh"
 
 // log_backtrace
@@ -385,8 +406,8 @@ void error_printf(const char* format, ...) __attribute__((noinline));
 int error_vprintf(int cpos, int color, const char* format, va_list val)
     __attribute__((noinline));
 
-// `panicing == true` iff some CPU has paniced
-extern bool panicing;
+// `panicking == true` iff some CPU has panicked
+extern bool panicking;
 
 
 // this_cpu
@@ -395,6 +416,14 @@ inline cpustate* this_cpu() {
     assert(is_cli());
     cpustate* result;
     asm volatile ("movq %%gs:(0), %0" : "=r" (result));
+    return result;
+}
+
+// current
+//    Return a pointer to the current `struct proc`.
+inline proc* current() {
+    proc* result;
+    asm volatile ("movq %%gs:(8), %0" : "=r" (result));
     return result;
 }
 

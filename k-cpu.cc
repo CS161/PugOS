@@ -1,5 +1,6 @@
 #include "kernel.hh"
 #include "k-vmiter.hh"
+#include "k-apic.hh"
 
 cpustate cpus[NCPU];
 int ncpu;
@@ -42,28 +43,29 @@ void cpustate::init() {
 }
 
 
-// cpustate::annihilate(p)
-//    Destroy p and scatter its ashes to the corners of the world
-static int ka2p(void* addr) {
-    return (int) (ka2pa(reinterpret_cast<uintptr_t>(addr)) / PAGESIZE);
+// cpustate::enable_irq(irqno)
+//    Enable external interrupt `irqno`, delivering it to
+//    this CPU.
+void cpustate::enable_irq(int irqno) {
+    assert(irqno >= IRQ_TIMER && irqno <= IRQ_SPURIOUS);
+    auto& ioapic = ioapicstate::get();
+    ioapic.enable_irq(irqno, INT_IRQ + irqno, lapic_id_);
 }
 
-#define debug_print(p, ptr)                                \
-    if (ptr != nullptr) {                               \
-        debug_printf("Freeing pid %d's '"#ptr"' va %p ", p->pid_, ptr);       \
-        debug_printf("pindex %d pa %p\n", ka2p(ptr), ka2pa(ptr));           \
-    } else {                                            \
-        debug_printf("Not freeing "#ptr", is null\n");    \
-    }
+// cpustate::disable_irq(irqno)
+//    Disable external interrupt `irqno`.
+void cpustate::disable_irq(int irqno) {
+    assert(irqno >= IRQ_TIMER && irqno <= IRQ_SPURIOUS);
+    auto& ioapic = ioapicstate::get();
+    ioapic.disable_irq(irqno);
+}
+
+
+// cpustate::annihilate(p)
+//    Destroy p and scatter its ashes to the corners of the world
 
 void annihilate(proc* p) {
     debug_printf("cpustate::annihilate pid %d\n", p->pid_);
-    // free stack page
-    // vmiter it(p, MEMSIZE_VIRTUAL - PAGESIZE);
-    // debug_printf("\tstack page: pa=%p ka=%p\n", it.pa(), it.ka());
-    // if (it.pa() != 0xffff'ffff'ffff'ffff) {
-    //     kfree(reinterpret_cast<void*>(pa2ka(it.pa())));
-    // }
 
     for (vmiter vmit(p); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
         if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
@@ -73,25 +75,12 @@ void annihilate(proc* p) {
         }
     }
 
-    // free misc proc struct stuff
-    // debug_printf("freeing regs_ and yields_\n");
-    // kfree(p->regs_);
-    // kfree(p->yields_);
-
     // free pagetables
     debug_printf("freeing l3-1 pagetables:\n");
     for (ptiter ptit(p, 0); ptit.low(); ptit.next()) {
-        // debug_printf("\t\tpa=%p\n", ptit.ptp_pa());
-        // if (ptit.ptp_pa() % PAGESIZE != 0) {
-        debug_printf("FREE PAGETABLE: ");
-        debug_printf("pid %d ", p->pid_);
-        debug_printf("pa %p ", ptit.ptp_pa());
-        debug_printf("va %p\n", ptit.va());
-        // }
         kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
     }
-    // debug_printf("\tfreeing l4 pagetable pa=%p ka=%p\n",
-        // ka2pa(p->pagetable_), p->pagetable_);
+
     debug_printf("Freeing l4 pagetable\n");
     kfree(p->pagetable_);
 
@@ -162,14 +151,6 @@ void cpustate::schedule(proc* yielding_from) {
     ++nschedule_;
 
     while (1) {
-        // if (current_) {
-        //     debug_printf(1, "cpu::schedule checking process pid %d\n",
-        //         current_->pid_);
-        // }
-        // else {
-        //     debug_printf(1, "cpu::schedule checking null process\n");
-        // }
-        // print_runq(this);
 
         // try to run `current`
         if (current_
@@ -190,11 +171,6 @@ void cpustate::schedule(proc* yielding_from) {
 
             // switch to a safe page table
             lcr3(ktext2pa(early_pagetable));
-            
-            // if `current` is broken, clean it up
-            // if (current_->state_ == proc::broken) {
-            //     annihilate(current_);
-            // }
         
             current_ = yielding_from = nullptr;
         }

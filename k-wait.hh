@@ -16,18 +16,28 @@ struct waiter {
 
     inline waiter(proc* p);
     inline ~waiter();
+    inline void prepare(wait_queue& wq);
     inline void prepare(wait_queue* wq);
     inline void block();
     inline void clear();
     inline void wake();
+
+    template <typename F>
+    inline void block_until(wait_queue& wq, F predicate);
+    template <typename F>
+    inline irqstate block_until(wait_queue& wq, F predicate, spinlock& lock);
+    template <typename F>
+    inline void block_until(wait_queue& wq, F predicate,
+                            spinlock& lock, irqstate& irqs);
 };
 
 
 struct wait_queue {
     list<waiter, &waiter::links_> q_;
-    spinlock lock_;
+    mutable spinlock lock_;
 
     // you might want to provide some convenience methods here
+    inline void wake_all();
 };
 
 
@@ -55,14 +65,18 @@ inline waiter::~waiter() {
 //    - Adds the waiter to a linked list of waiters associated with the waitq.
 //    - Unlocks the waitq data structure.
 
+inline void waiter::prepare(wait_queue& wq) {
+    prepare(&wq);
+}
+
 inline void waiter::prepare(wait_queue* wq) {
-    auto irqs = wq_->lock_.lock();
-    wq_ = wq;
+    auto irqs = wq->lock_.lock();
     // debug_printf_(__FILE__, __FUNCTION__, __LINE__,
     //     "waiter::prepare pid %d\n", p_->pid_);
     p_->state_ = proc::blocked;
-    wq_->q_.push_back(this);
-    wq_->lock_.unlock(irqs);
+    wq->q_.push_back(this);
+    wq_ = wq;
+    wq->lock_.unlock(irqs);
 }
 
 
@@ -116,4 +130,62 @@ inline void waiter::wake() {
     }
     wq_->lock_.unlock(irqs);
 }
+
+
+// waiter::block_until(wq, predicate)
+//    Block on `wq` until `predicate()` returns true.
+template <typename F>
+inline void waiter::block_until(wait_queue& wq, F predicate) {
+    while (1) {
+        prepare(wq);
+        if (predicate()) {
+            break;
+        }
+        block();
+    }
+    clear();
+}
+
+// waiter::block_until(wq, predicate, lock)
+//    Lock `lock`, then block on `wq` until `predicate()` returns
+//    true. All calls to `predicate` have `lock` locked. Returns
+//    with `lock` locked; the return value is the relevant `irqstate`.
+template <typename F>
+inline irqstate waiter::block_until(wait_queue& wq, F predicate,
+                                    spinlock& lock) {
+    auto irqs = lock.lock();
+    block_until(wq, predicate, lock, irqs);
+    return std::move(irqs);
+}
+
+// waiter::block_until(wq, predicate, lock, irqs)
+//    Block on `wq` until `predicate()` returns true. The `lock`
+//    must be locked; it is unlocked before blocking (if blocking
+//    is necessary). All calls to `predicate` have `lock` locked,
+//    and `lock` is locked on return.
+template <typename F>
+inline void waiter::block_until(wait_queue& wq, F predicate,
+                                spinlock& lock, irqstate& irqs) {
+    while (1) {
+        prepare(wq);
+        if (predicate()) {
+            break;
+        }
+        lock.unlock(irqs);
+        block();
+        irqs = lock.lock();
+    }
+    clear();
+}
+
+// wait_queue::wake_all()
+//    Lock the wait queue, then clear it by waking all waiters.
+inline void wait_queue::wake_all() {
+    auto irqs = lock_.lock();
+    while (auto w = q_.pop_front()) {
+        w->wake();
+    }
+    lock_.unlock(irqs);
+}
+
 #endif

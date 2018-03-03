@@ -1,5 +1,6 @@
 #include "kernel.hh"
 #include "k-apic.hh"
+#include "k-devices.hh"
 #include "k-vmiter.hh"
 
 // kernel.cc
@@ -33,8 +34,8 @@ void kernel_start(const char* command) {
     }
 
     auto irqs = ptable_lock.lock();
-    process_setup(1, "p-init");
-    process_setup(2, "p-allocexit");
+    process_setup(1, "init");
+    process_setup(2, "testppid");
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
@@ -281,9 +282,6 @@ void proc::exception(regstate* regs) {
     // Show the current cursor location.
     console_show_cursor(cursorpos);
 
-    // If Control-C was typed, exit the virtual machine.
-    check_keyboard();
-
 
     // Actually handle the exception.
     switch (regs->reg_intno) {
@@ -322,6 +320,10 @@ void proc::exception(regstate* regs) {
         this->yield();
         break;
     }
+
+    case INT_IRQ + IRQ_KEYBOARD:
+        keyboardstate::get().handle_interrupt();
+        break;
 
     default:
         panic("Unexpected exception %d!\n", regs->reg_intno);
@@ -370,7 +372,7 @@ uintptr_t proc::syscall(regstate* regs) {
 
     case SYSCALL_PAGE_ALLOC: {
         uintptr_t addr = regs->reg_rdi;
-        if (addr >= 0x800000000000 || addr & 0xFFF) {
+        if (addr >= VA_LOWEND || addr & 0xFFF) {
             break;
         }
         x86_64_page* pg = kallocpage();
@@ -514,10 +516,70 @@ uintptr_t proc::syscall(regstate* regs) {
         break;
     }
 
+    case SYSCALL_READ: {
+        int fd = regs->reg_rdi;
+        uintptr_t addr = regs->reg_rsi;
+        size_t sz = regs->reg_rdx;
+
+        auto& kbd = keyboardstate::get();
+        auto irqs = kbd.lock_.lock();
+
+        // mark that we are now reading from the keyboard
+        // (so `q` should not power off)
+        if (kbd.state_ == kbd.boot) {
+            kbd.state_ = kbd.input;
+        }
+
+        // block until a line is available
+        waiter(this).block_until(kbd.wq_, [&] () {
+                return sz == 0 || kbd.eol_ != 0;
+            }, kbd.lock_, irqs);
+
+        // read that line or lines
+        size_t n = 0;
+        while (kbd.eol_ != 0 && n < sz) {
+            if (kbd.buf_[kbd.pos_] == 0x04) {
+                // Ctrl-D means EOF
+                if (n == 0) {
+                    kbd.consume(1);
+                }
+                break;
+            } else {
+                *reinterpret_cast<char*>(addr) = kbd.buf_[kbd.pos_];
+                ++addr;
+                ++n;
+                kbd.consume(1);
+            }
+        }
+
+        kbd.lock_.unlock(irqs);
+        return n;
+    }
+
+    case SYSCALL_WRITE: {
+        int fd = regs->reg_rdi;
+        uintptr_t addr = regs->reg_rsi;
+        size_t sz = regs->reg_rdx;
+
+        auto& csl = consolestate::get();
+        auto irqs = csl.lock_.lock();
+
+        size_t n = 0;
+        while (n < sz) {
+            int ch = *reinterpret_cast<const char*>(addr);
+            ++addr;
+            ++n;
+            console_printf(0x0F00, "%c", ch);
+        }
+
+        csl.lock_.unlock(irqs);
+        return n;
+    }
+
     default:
         // no such system call
         log_printf("%d: no such system call %u\n", pid_, regs->reg_rax);
-        break;
+        r = E_NOSYS;
     }
 
     check_corruption(this);

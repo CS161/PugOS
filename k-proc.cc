@@ -1,7 +1,6 @@
 #include "elf.h"
 #include "kernel.hh"
 #include "k-vmiter.hh"
-#include <new>                  // get placement new
 
 proc* ptable[NPROC];                    // array of process descriptor pointers
 // protects `ptable`, pid_, ppid_, and children_
@@ -20,7 +19,12 @@ proc::proc()
 //    Allocate and return a new `proc`. Calls the constructor.
 
 proc* kalloc_proc() {
-    void* ptr = kallocpage();
+    void* ptr;
+    if (sizeof(proc) <= PAGESIZE) {
+        ptr = kallocpage();
+    } else {
+        ptr = kalloc(sizeof(proc));
+    }
     if (ptr) {
         return new (ptr) proc;
     } else {
