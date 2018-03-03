@@ -58,6 +58,16 @@ int vmiter::map(uintptr_t pa, int perm) {
     return 0;
 }
 
+bool vmiter::check_range(size_t sz, uint64_t perms) {
+    uintptr_t start = va();
+    while (va() < start + sz) {
+        if (!perm(perms))
+            return false;
+        step();
+    }
+    return true;
+}
+
 
 void ptiter::go(uintptr_t va) {
     level_ = 3;

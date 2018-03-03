@@ -35,7 +35,7 @@ void kernel_start(const char* command) {
 
     auto irqs = ptable_lock.lock();
     process_setup(1, "init");
-    process_setup(2, "testppid");
+    process_setup(2, "testrwaddr");
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
@@ -517,6 +517,18 @@ uintptr_t proc::syscall(regstate* regs) {
         uintptr_t addr = regs->reg_rsi;
         size_t sz = regs->reg_rdx;
 
+        if (sz == 0) {
+            r = 0;
+            break;
+        }
+
+        if (addr + sz > VA_LOWEND
+            || addr > VA_HIGHMAX - sz
+            || !vmiter(this, addr).check_range(sz, PTE_P | PTE_U | PTE_W)) {
+            r = E_FAULT;
+            break;
+        }
+
         auto& kbd = keyboardstate::get();
         auto irqs = kbd.lock_.lock();
 
@@ -549,13 +561,26 @@ uintptr_t proc::syscall(regstate* regs) {
         }
 
         kbd.lock_.unlock(irqs);
-        return n;
+        r = n;
+        break;
     }
 
     case SYSCALL_WRITE: {
         int fd = regs->reg_rdi;
         uintptr_t addr = regs->reg_rsi;
         size_t sz = regs->reg_rdx;
+
+        if (sz == 0) {
+            r = 0;
+            break;
+        }
+
+        if (addr + sz > VA_LOWEND
+            || addr > VA_HIGHMAX - sz
+            || !vmiter(this, addr).check_range(sz, PTE_P | PTE_U)) {
+            r = E_FAULT;
+            break;
+        }
 
         auto& csl = consolestate::get();
         auto irqs = csl.lock_.lock();
@@ -569,7 +594,8 @@ uintptr_t proc::syscall(regstate* regs) {
         }
 
         csl.lock_.unlock(irqs);
-        return n;
+        r = n;
+        break;
     }
 
     default:

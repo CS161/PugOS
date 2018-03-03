@@ -27,6 +27,8 @@ class vmiter {
     inline bool writable() const;     // is va writable?
     inline bool user() const;         // is va user-accessible (unprivileged)?
 
+    bool check_range(size_t sz, uint64_t perms); // check perms of range
+
     inline vmiter& find(uintptr_t va);   // change virtual address to `va`
     inline vmiter& operator+=(intptr_t delta);  // advance `va` by `delta`
     inline vmiter& operator-=(intptr_t delta);
