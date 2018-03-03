@@ -34,7 +34,7 @@ void kernel_start(const char* command) {
 
     auto irqs = ptable_lock.lock();
     process_setup(1, "p-init");
-    process_setup(2, "p-testeintr");
+    process_setup(2, "p-allocexit");
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
@@ -59,7 +59,7 @@ void process_setup(pid_t pid, const char* name) {
     p->init_user(pid, npt);
 
     int r = p->load(name);
-    assert(r >= 0);
+    assert(r >= 0 && "probably a bad process name");
     p->regs_->reg_rsp = MEMSIZE_VIRTUAL;
     x86_64_page* stkpg = kallocpage();
     assert(stkpg);
@@ -93,6 +93,8 @@ void process_exit(proc* p, int status = 0) {
     for (vmiter vmit(p); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
         if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
             kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
+            int r = vmiter(p->pagetable_, vmit.va()).map(0x0);
+            assert(r >= 0);
         }
     }
 
@@ -103,7 +105,7 @@ void process_exit(proc* p, int status = 0) {
 
     auto irqs = ptable_lock.lock();
     auto daddy = ptable[p->ppid_];
-    if (daddy->state_ == proc::blocked) {
+    if (daddy && daddy->state_ == proc::blocked) {
         daddy->interrupted_ = true;
         daddy->wake();
     }
@@ -220,6 +222,8 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
     // registers.
     *fproc->regs_ = *ogregs;
 
+    fproc->regs_->reg_rax = 0;
+
     // 6. Enqueue the new process on some CPU’s run queue.
     int cpu = fproc->cpu_ = fpid % ncpu;
     cpus[cpu].runq_lock_.lock_noirq();
@@ -229,7 +233,6 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
 
     // 7. Arrange for the new PID to be returned to the parent process and 0 to
     // be returned to the child process.
-    fproc->regs_->reg_rax = 0;
     return fpid;
 }
 

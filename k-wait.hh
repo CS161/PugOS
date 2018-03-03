@@ -56,8 +56,8 @@ inline waiter::~waiter() {
 //    - Unlocks the waitq data structure.
 
 inline void waiter::prepare(wait_queue* wq) {
-    wq_ = wq;
     auto irqs = wq_->lock_.lock();
+    wq_ = wq;
     // debug_printf_(__FILE__, __FUNCTION__, __LINE__,
     //     "waiter::prepare pid %d\n", p_->pid_);
     p_->state_ = proc::blocked;
