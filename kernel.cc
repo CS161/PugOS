@@ -112,12 +112,8 @@ void process_exit(proc* p, int status = 0) {
     }
     ptable_lock.unlock(irqs);
 
-    irqs = waitpid_wq.lock_.lock();
-    while (auto w = waitpid_wq.q_.pop_front()) {
-        debug_printf("process_exit waking pid %d\n", w->p_->pid_);
-        w->p_->wake();
-    }
-    waitpid_wq.lock_.unlock(irqs);
+    debug_printf("process_exit waking waitpid_wq\n");
+    waitpid_wq.wake_all();
 
     p->state_ = proc::broken;
 }
@@ -291,7 +287,7 @@ void proc::exception(regstate* regs) {
         if (cpu->index_ == 0) {
             ++ticks;
             if (!sleep_wheel.wqs_[ticks % WHEEL_SPOKES].q_.empty()) {
-                sleep_wheel.wqs_[ticks % WHEEL_SPOKES].q_.front()->wake();
+                sleep_wheel.wqs_[ticks % WHEEL_SPOKES].wake_all();
             }
             kdisplay_ontick();
         }

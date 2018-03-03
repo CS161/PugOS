@@ -118,17 +118,10 @@ inline void waiter::clear() {
 
 
 // waiter::wake()
-//    Wakes up all waiting processes currently on the wait queue for this waiter
+//    Wakes up all the process waiting on this waiter
 
 inline void waiter::wake() {
-    auto irqs = wq_->lock_.lock();
-    while (auto w = wq_->q_.pop_front()) {
-        // debug_printf_(__FILE__, __FUNCTION__, __LINE__,
-        //     "waiter::wake pid %d, state %s, %sresumable\n",
-        //     w->p_->pid_, state_string(w->p_), w->p_->resumable() ? "" : "not ");
-        w->p_->wake();
-    }
-    wq_->lock_.unlock(irqs);
+    p_->wake();
 }
 
 
