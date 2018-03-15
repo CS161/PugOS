@@ -95,7 +95,6 @@ void process_setup(pid_t pid, const char* name) {
 
 
 void process_exit(proc* p, int status = 0) {
-    debug_printf("exiting pid %d\n", p->pid_);
     p->exit_status_ = status;
 
     // free virtual memory
@@ -116,6 +115,8 @@ void process_exit(proc* p, int status = 0) {
     kfree(reinterpret_cast<void*>(p->fdtable_));
 
     auto irqs = ptable_lock.lock();
+    debug_printf("[%d] process_exit interrupting parent %d\n",
+                 p->pid_, p->ppid_);
     auto daddy = ptable[p->ppid_];
     if (daddy && daddy->state_ == proc::blocked) {
         daddy->interrupted_ = true;
@@ -128,9 +129,9 @@ void process_exit(proc* p, int status = 0) {
         child->ppid_ = 1;
         ptable[1]->children_.push_back(child);
     }
-    ptable_lock.unlock(irqs);
 
-    debug_printf("process_exit waking waitpid_wq\n");
+    debug_printf("[%d] process_exit waking waitpid_wq\n", p->pid_);
+    ptable_lock.unlock(irqs);
     waitpid_wq.wake_all();
 
     p->state_ = proc::broken;
@@ -238,7 +239,8 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
     // 6. Enqueue the new process on some CPU’s run queue.
     int cpu = fproc->cpu_ = fpid % ncpu;
     cpus[cpu].runq_lock_.lock_noirq();
-    debug_printf("process_fork enqueueing pid %d\n", fproc->pid_);
+    debug_printf("[%d] process_fork enqueueing pid %d\n",
+                 ogproc->pid_, fproc->pid_);
     cpus[cpu].enqueue(fproc);
     cpus[cpu].runq_lock_.unlock_noirq();
 
@@ -427,8 +429,9 @@ uintptr_t proc::syscall(regstate* regs) {
     }
 
     case SYSCALL_MSLEEP: {
-        unsigned long end = ticks + (regs->reg_rdi + 9) / 10;
         interrupted_ = false;
+        unsigned long end = ticks + (regs->reg_rdi + 9) / 10;
+        debug_printf("[%d] sys_msleep(%d)\n", pid_, regs->reg_rdi);
         waiter w(this);
         auto wq = &sleep_wheel.wqs_[end % WHEEL_SPOKES];
         while (true) {
@@ -439,12 +442,11 @@ uintptr_t proc::syscall(regstate* regs) {
         }
         w.clear();
 
-        debug_printf("resumes: %d\n", resumes);
+        debug_printf("[-] resumes: %d\n", resumes);
 
-        if (interrupted_)
-            r = E_INTR;
-        else
-            r = 0;
+        debug_printf("[%d] sys_msleep%sinterrupted\n", pid_,
+                     interrupted_ ? " " : " not ");
+        r = interrupted_ ? E_INTR : 0;
         break;
     }
 
@@ -458,7 +460,7 @@ uintptr_t proc::syscall(regstate* regs) {
         int options = regs->reg_rsi;
 
         auto irqs = ptable_lock.lock();
-        debug_printf("waitpid from pid %d on child pid %d, options %s W_NOHANG"
+        debug_printf("[%d] sys_waitpid on child pid %d; options %s W_NOHANG"
                      "\n", pid_, child_pid, options == W_NOHANG ? "=" : "!=");
 
         pid_t parent_of_child = 0;
@@ -471,14 +473,14 @@ uintptr_t proc::syscall(regstate* regs) {
         if ((child_pid != 0 && pid_ != parent_of_child)
             || (child_pid == 0 && children_.empty())) {
             r = E_CHILD;
-            debug_printf("returning E_CHILD r=%d\n", r);
+            debug_printf("[%d] sys_waitpid returning E_CHILD r=%d\n", pid_, r);
             break;
         }
         else {
             waiter w(this);
             while (true) {
                 irqs = ptable_lock.lock();
-                debug_printf("waitpid preparing on pid %d\n", pid_);
+                debug_printf("[%d] sys_waitpid preparing\n", pid_);
                 w.prepare(&waitpid_wq);
 
                 // wait for any child
@@ -505,14 +507,15 @@ uintptr_t proc::syscall(regstate* regs) {
             }
             w.clear();
         }
-        debug_printf("to_reap pid: %d\n", to_reap);
+        debug_printf("[%d] sys_waitpid: to_reap pid = %d\n", pid_, to_reap);
 
         if (!to_reap && options == W_NOHANG && r != (uintptr_t) E_CHILD) {
             r = E_AGAIN;
-            debug_printf("returning E_AGAIN r=%d\n", r);
+            debug_printf("[%d] sys_waitpid returning E_AGAIN r=%d\n", pid_, r);
         }
         else {
-            debug_printf("returning pid %d\n", r);
+            debug_printf("[%d] sys_waitpid returning pid %d\n",
+                pid_, r);
             int exit_status = process_reap(to_reap);
             asm("movl %0, %%ecx;": : "r" (exit_status) : "ecx");
             r = to_reap;
