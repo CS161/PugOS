@@ -35,7 +35,15 @@ void kernel_start(const char* command) {
 
     auto irqs = ptable_lock.lock();
     process_setup(1, "init");
-    process_setup(2, "allocexit");
+    const char* pname;
+#ifdef CHICKADEE_FIRST_PROCESS
+    // make run-NAMEHERE
+    pname = CHICKADEE_FIRST_PROCESS;
+#else
+    // manual entry
+    pname = "testzombie";
+#endif
+    process_setup(2, pname);
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
@@ -49,10 +57,6 @@ void kernel_start(const char* command) {
 //    %rip and %rsp, gives it a stack page, and marks it as runnable.
 
 void process_setup(pid_t pid, const char* name) {
-#ifdef CHICKADEE_FIRST_PROCESS
-    name = CHICKADEE_FIRST_PROCESS;
-#endif
-
     assert(!ptable[pid]);
     proc* p = ptable[pid] = kalloc_proc();
     x86_64_pagetable* npt = kalloc_pagetable();
