@@ -4,6 +4,7 @@
 #include "lib.hh"
 #include "k-list.hh"
 #include "k-lock.hh"
+#include "k-fs.hh"
 #include "k-memrange.hh"
 #if CHICKADEE_PROCESS
 #error "kernel.hh should not be used by process code."
@@ -43,6 +44,8 @@ struct __attribute__((aligned(4096))) proc {
 
     int exit_status_;
     bool interrupted_;
+
+    fdtable* fdtable_;
 
     int canary_;
 

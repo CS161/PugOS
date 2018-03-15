@@ -91,7 +91,6 @@ void process_main() {
     for (int i = 0; i != 6; ++i) {
         sys_msleep(50); // loop because a long `msleep` could be interrupted
     }
-    // sys_msleep(300);
     console_printf("ppid tests with exit succeed\n");
     console_printf("testppid succeeded.\n");
     sys_exit(0);

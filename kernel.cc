@@ -35,7 +35,7 @@ void kernel_start(const char* command) {
 
     auto irqs = ptable_lock.lock();
     process_setup(1, "init");
-    process_setup(2, "testrwaddr");
+    process_setup(2, "allocexit");
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
@@ -57,6 +57,10 @@ void process_setup(pid_t pid, const char* name) {
     proc* p = ptable[pid] = kalloc_proc();
     x86_64_pagetable* npt = kalloc_pagetable();
     assert(p && npt);
+
+    p->fdtable_ = reinterpret_cast<fdtable*>(kalloc(sizeof(fdtable)));
+    assert(p->fdtable_);
+
     p->init_user(pid, npt);
 
     int r = p->load(name);
@@ -104,11 +108,21 @@ void process_exit(proc* p, int status = 0) {
         kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
     }
 
+    // free file descriptor table
+    kfree(reinterpret_cast<void*>(p->fdtable_));
+
     auto irqs = ptable_lock.lock();
     auto daddy = ptable[p->ppid_];
     if (daddy && daddy->state_ == proc::blocked) {
         daddy->interrupted_ = true;
         daddy->wake();
+    }
+
+    // manage process hierarchy
+    while (!p->children_.empty()) {
+        proc* child = p->children_.pop_front();
+        child->ppid_ = 1;
+        ptable[1]->children_.push_back(child);
     }
     ptable_lock.unlock(irqs);
 
@@ -123,13 +137,9 @@ void process_exit(proc* p, int status = 0) {
 int process_reap(pid_t pid) {
     auto irqs = ptable_lock.lock();
     proc* p = ptable[pid];
+
     // manage process hierarchy
     ptable[p->ppid_]->children_.erase(p);
-    while (!p->children_.empty()) {
-        proc* child = p->children_.pop_front();
-        child->ppid_ = 1;
-        ptable[1]->children_.push_back(child);
-    }
 
     int status = p->exit_status_;
     kfree(p->pagetable_);
