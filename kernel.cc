@@ -565,29 +565,29 @@ uintptr_t proc::syscall(regstate* regs) {
         uintptr_t addr = regs->reg_rsi;
         size_t sz = regs->reg_rdx;
 
-        auto fdt_irqs = fdtable_->lock_.lock();
-        debug_printf("io: %s on fd %d\n",
+        auto irqs = fdtable_->lock_.lock();
+        debug_printf("[%d] sys_%s on fd %d", pid_,
             regs->reg_rax == SYSCALL_READ ? "read" : "write", fd);
         if (fd < 0 || fd >= NFDS || fdtable_->fds_[fd] == nullptr) {
-            fdtable_->lock_.unlock(fdt_irqs);
+            fdtable_->lock_.unlock(irqs);
             r = E_BADF;
-            debug_printf("returning E_BADF\n");
+            debug_printf("; returning E_BADF\n");
             break;
         }
 
         file* f = fdtable_->fds_[fd];
-        debug_printf("io: mode r? %s; w? %s\n",
+        debug_printf("; mode r? %s; w? %s\n",
             f->readable_ ? "yes" : "no", f->writeable_ ? "yes" : "no");
         if ((regs->reg_rax == SYSCALL_READ && !f->readable_)
             || (regs->reg_rax == SYSCALL_WRITE && !f->writeable_)) {
-            fdtable_->lock_.unlock(fdt_irqs);
+            fdtable_->lock_.unlock(irqs);
             r = E_PERM;
             debug_printf("returning E_PERM\n");
             break;
         }
 
         if (sz == 0) {
-            fdtable_->lock_.unlock(fdt_irqs);
+            fdtable_->lock_.unlock(irqs);
             r = 0;
             break;
         }
@@ -600,14 +600,16 @@ uintptr_t proc::syscall(regstate* regs) {
         if (addr + sz > VA_LOWEND
             || addr > VA_HIGHMAX - sz
             || !vmiter(this, addr).check_range(sz, mem_flags)) {
-            fdtable_->lock_.unlock(fdt_irqs);
+            fdtable_->lock_.unlock(irqs);
             r = E_FAULT;
             debug_printf("returning E_FAULT\n");
             break;
         }
 
-        auto file_irqs = f->lock_.lock();
-        fdtable_->lock_.unlock(fdt_irqs);
+        f->lock_.lock_noirq();
+        fdtable_->lock_.unlock_noirq();
+        f->refs_++;
+        f->lock_.unlock(irqs);
 
         if (regs->reg_rax == SYSCALL_READ) {
             r = f->vnode_->read(addr, sz);
@@ -616,10 +618,12 @@ uintptr_t proc::syscall(regstate* regs) {
             r = f->vnode_->write(addr, sz);
         }
 
-        f->lock_.unlock(file_irqs);
+        irqs = f->lock_.lock();
+        f->deref();
+        f->lock_.unlock(irqs);
 
-        debug_printf("%s %d bytes\n",
-            regs->reg_rax == SYSCALL_READ ? "read" : "wrote", r);
+        debug_printf("[%d] sys_%s %d bytes\n", pid_,
+            regs->reg_rax == SYSCALL_READ ? "read read" : "write wrote", r);
 
         break;
     }
@@ -628,9 +632,9 @@ uintptr_t proc::syscall(regstate* regs) {
         int fd = regs->reg_rdi;
 
         debug_printf("[%d] sys_close(%d)\n", pid_, fd);
-        auto fdt_irqs = fdtable_->lock_.lock();
+        auto irqs = fdtable_->lock_.lock();
         if (fd < 0 || fd >= NFDS || fdtable_->fds_[fd] == nullptr) {
-            fdtable_->lock_.unlock(fdt_irqs);
+            fdtable_->lock_.unlock(irqs);
             debug_printf("returning E_BADF\n");
             r = E_BADF;
             break;
@@ -638,7 +642,7 @@ uintptr_t proc::syscall(regstate* regs) {
 
         fdtable_->fds_[fd]->deref();
         fdtable_->fds_[fd] = nullptr;
-        fdtable_->lock_.unlock(fdt_irqs);
+        fdtable_->lock_.unlock(irqs);
 
         r = 0;
         break;
@@ -649,10 +653,10 @@ uintptr_t proc::syscall(regstate* regs) {
         int newfd = regs->reg_rsi;
 
         debug_printf("[%d] sys_dup2(%d, %d)\n", pid_, oldfd, newfd);
-        auto fdt_irqs = fdtable_->lock_.lock();
+        auto irqs = fdtable_->lock_.lock();
         if (oldfd < 0 || newfd < 0 || oldfd >= NFDS || newfd >= NFDS
             || fdtable_->fds_[oldfd] == nullptr) {
-            fdtable_->lock_.unlock(fdt_irqs);
+            fdtable_->lock_.unlock(irqs);
             debug_printf("returning E_BADF\n");
             r = E_BADF;
             break;
@@ -661,7 +665,7 @@ uintptr_t proc::syscall(regstate* regs) {
         fdtable_->fds_[newfd] && fdtable_->fds_[newfd]->deref();
         fdtable_->fds_[newfd] = fdtable_->fds_[oldfd];
         fdtable_->fds_[oldfd]->refs_++;
-        fdtable_->lock_.unlock(fdt_irqs);
+        fdtable_->lock_.unlock(irqs);
 
         r = 0;
         break;
