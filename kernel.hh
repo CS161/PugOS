@@ -4,7 +4,6 @@
 #include "lib.hh"
 #include "k-list.hh"
 #include "k-lock.hh"
-#include "k-fs.hh"
 #include "k-memrange.hh"
 #if CHICKADEE_PROCESS
 #error "kernel.hh should not be used by process code."
@@ -19,6 +18,8 @@ struct yieldstate;
 //    Functions, constants, and definitions for the kernel.
 
 extern unsigned long resumes;
+
+struct fdtable; // forward declaration
 
 // Process descriptor type
 struct __attribute__((aligned(4096))) proc {
@@ -77,6 +78,7 @@ struct __attribute__((aligned(4096))) proc {
 };
 
 #include "k-wait.hh"
+#include "k-fs.hh"
 
 #define NPROC 16
 extern proc* ptable[NPROC];
@@ -391,7 +393,7 @@ void log_vprintf(const char* format, va_list val) __attribute__((noinline));
 void debug_printf_(const char* file, const char* func, int line,
                           const char* format, ...);
 
-#define DEBUG false
+#define DEBUG true
 #include "k-debug.hh"
 
 // log_backtrace

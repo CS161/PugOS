@@ -30,7 +30,7 @@ inline constexpr bool debug_filter(const char* file, const char* func) {
         case debug_hash("kernel.cc"):
             switch (debug_hash(func)) {
                 // case debug_hash("process_exit"): return false;
-                // case debug_hash("process_setup"): return true;
+                case debug_hash("process_setup"): return false;
                 // case debug_hash("process_fork"): return true;
                 // case debug_hash("syscall"): return false;
                 default: return true;

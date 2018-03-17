@@ -62,8 +62,19 @@ void process_setup(pid_t pid, const char* name) {
     x86_64_pagetable* npt = kalloc_pagetable();
     assert(p && npt);
 
-    p->fdtable_ = reinterpret_cast<fdtable*>(kalloc(sizeof(fdtable)));
+    // initial fdtable setup
+    p->fdtable_ = knew<fdtable>();
     assert(p->fdtable_);
+    // fds 0, 1, and 2 all hooked up to keyboard/console
+    file* f = p->fdtable_->fds_[0] = p->fdtable_->fds_[1] =
+              p->fdtable_->fds_[2] = knew<file>();
+    assert(f);
+    f->type_ = file::stream;
+    f->readable_ = true;
+    f->writeable_ = true;
+    f->vnode_ = knew<vn_keyboard_console>();
+    assert(f->vnode_);
+    f->refs_ = 3;
 
     p->init_user(pid, npt);
 
@@ -112,8 +123,9 @@ void process_exit(proc* p, int status = 0) {
     }
 
     // free file descriptor table
-    kfree(reinterpret_cast<void*>(p->fdtable_));
+    kdelete(p->fdtable_);
 
+    // interrupt parent
     auto irqs = ptable_lock.lock();
     debug_printf("[%d] process_exit interrupting parent %d\n",
                  p->pid_, p->ppid_);
@@ -175,13 +187,23 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
         return -1;
     }
 
-    // 2. Allocate a struct proc and a page table.
-    // 5. Store the new process in the process table.
+    // allocate proc, store in ptable
     proc* fproc = ptable[fpid] = kalloc_proc();
     if (!fproc) {
         ptable_lock.unlock(irqs);
         return -1;
     }
+
+    // allocate fdtable
+    fproc->fdtable_ = knew<fdtable>();
+    if (!fproc->fdtable_) {
+        kdelete(fproc);
+        ptable[fpid] = nullptr;
+        ptable_lock.unlock(irqs);
+        return -1;
+    }
+
+    // misc initialization
     fproc->pid_ = fpid;
     fproc->state_ = proc::broken;
     fproc->ppid_ = ogproc->pid_;
@@ -189,10 +211,18 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
     ogproc->children_.push_back(fproc);
     ptable_lock.unlock(irqs);
 
+    // clone ogproc's fdtable
+    auto fdt_irqs = ogproc->fdtable_->lock_.lock();
+    fproc->fdtable_ = ogproc->fdtable_;
+    for (unsigned i = 0; fproc->fdtable_->fds_[i] && i < NFDS; i++) {
+        fproc->fdtable_->fds_[i]->refs_++;
+    }
+    ogproc->fdtable_->lock_.unlock(fdt_irqs);
 
     x86_64_pagetable* fpt = fproc->pagetable_ = kalloc_pagetable();
     if (!fpt) {
-        kfree(fproc);
+        kdelete(fproc->fdtable_);
+        kdelete(fproc);
         irqs = ptable_lock.lock();
         ptable[fpid] = nullptr;
         ptable_lock.unlock(irqs);
@@ -529,91 +559,111 @@ uintptr_t proc::syscall(regstate* regs) {
         break;
     }
 
-    case SYSCALL_READ: {
-        int fd = regs->reg_rdi;
-        uintptr_t addr = regs->reg_rsi;
-        size_t sz = regs->reg_rdx;
-
-        if (sz == 0) {
-            r = 0;
-            break;
-        }
-
-        // verify inputs are valid
-        if (addr + sz > VA_LOWEND
-            || addr > VA_HIGHMAX - sz
-            || !vmiter(this, addr).check_range(sz, PTE_P | PTE_U | PTE_W)) {
-            r = E_FAULT;
-            break;
-        }
-
-        auto& kbd = keyboardstate::get();
-        auto irqs = kbd.lock_.lock();
-
-        // mark that we are now reading from the keyboard
-        // (so `q` should not power off)
-        if (kbd.state_ == kbd.boot) {
-            kbd.state_ = kbd.input;
-        }
-
-        // block until a line is available
-        waiter(this).block_until(kbd.wq_, [&] () {
-                return sz == 0 || kbd.eol_ != 0;
-            }, kbd.lock_, irqs);
-
-        // read that line or lines
-        size_t n = 0;
-        while (kbd.eol_ != 0 && n < sz) {
-            if (kbd.buf_[kbd.pos_] == 0x04) {
-                // Ctrl-D means EOF
-                if (n == 0) {
-                    kbd.consume(1);
-                }
-                break;
-            } else {
-                *reinterpret_cast<char*>(addr) = kbd.buf_[kbd.pos_];
-                ++addr;
-                ++n;
-                kbd.consume(1);
-            }
-        }
-
-        kbd.lock_.unlock(irqs);
-        r = n;
-        break;
-    }
-
+    case SYSCALL_READ:
     case SYSCALL_WRITE: {
         int fd = regs->reg_rdi;
         uintptr_t addr = regs->reg_rsi;
         size_t sz = regs->reg_rdx;
 
+        auto fdt_irqs = fdtable_->lock_.lock();
+        debug_printf("io: %s on fd %d\n",
+            regs->reg_rax == SYSCALL_READ ? "read" : "write", fd);
+        if (fd < 0 || fd >= NFDS || fdtable_->fds_[fd] == nullptr) {
+            fdtable_->lock_.unlock(fdt_irqs);
+            r = E_BADF;
+            debug_printf("returning E_BADF\n");
+            break;
+        }
+
+        file* f = fdtable_->fds_[fd];
+        debug_printf("io: mode r? %s; w? %s\n",
+            f->readable_ ? "yes" : "no", f->writeable_ ? "yes" : "no");
+        if ((regs->reg_rax == SYSCALL_READ && !f->readable_)
+            || (regs->reg_rax == SYSCALL_WRITE && !f->writeable_)) {
+            fdtable_->lock_.unlock(fdt_irqs);
+            r = E_PERM;
+            debug_printf("returning E_PERM\n");
+            break;
+        }
+
         if (sz == 0) {
+            fdtable_->lock_.unlock(fdt_irqs);
             r = 0;
             break;
         }
 
         // verify inputs are valid
+        auto mem_flags = PTE_P | PTE_U;
+        if (regs->reg_rax == SYSCALL_READ) {
+            mem_flags |= PTE_W;
+        }
         if (addr + sz > VA_LOWEND
             || addr > VA_HIGHMAX - sz
-            || !vmiter(this, addr).check_range(sz, PTE_P | PTE_U)) {
+            || !vmiter(this, addr).check_range(sz, mem_flags)) {
+            fdtable_->lock_.unlock(fdt_irqs);
             r = E_FAULT;
+            debug_printf("returning E_FAULT\n");
             break;
         }
 
-        auto& csl = consolestate::get();
-        auto irqs = csl.lock_.lock();
+        auto file_irqs = f->lock_.lock();
+        fdtable_->lock_.unlock(fdt_irqs);
 
-        size_t n = 0;
-        while (n < sz) {
-            int ch = *reinterpret_cast<const char*>(addr);
-            ++addr;
-            ++n;
-            console_printf(0x0F00, "%c", ch);
+        if (regs->reg_rax == SYSCALL_READ) {
+            r = f->vnode_->read(addr, sz);
+        }
+        else {
+            r = f->vnode_->write(addr, sz);
         }
 
-        csl.lock_.unlock(irqs);
-        r = n;
+        f->lock_.unlock(file_irqs);
+
+        debug_printf("%s %d bytes\n",
+            regs->reg_rax == SYSCALL_READ ? "read" : "wrote", r);
+
+        break;
+    }
+
+    case SYSCALL_CLOSE: {
+        int fd = regs->reg_rdi;
+
+        debug_printf("[%d] sys_close(%d)\n", pid_, fd);
+        auto fdt_irqs = fdtable_->lock_.lock();
+        if (fd < 0 || fd >= NFDS || fdtable_->fds_[fd] == nullptr) {
+            fdtable_->lock_.unlock(fdt_irqs);
+            debug_printf("returning E_BADF\n");
+            r = E_BADF;
+            break;
+        }
+
+        fdtable_->fds_[fd]->deref();
+        fdtable_->fds_[fd] = nullptr;
+        fdtable_->lock_.unlock(fdt_irqs);
+
+        r = 0;
+        break;
+    }
+
+    case SYSCALL_DUP2: {
+        int oldfd = regs->reg_rdi;
+        int newfd = regs->reg_rsi;
+
+        debug_printf("[%d] sys_dup2(%d, %d)\n", pid_, oldfd, newfd);
+        auto fdt_irqs = fdtable_->lock_.lock();
+        if (oldfd < 0 || newfd < 0 || oldfd >= NFDS || newfd >= NFDS
+            || fdtable_->fds_[oldfd] == nullptr) {
+            fdtable_->lock_.unlock(fdt_irqs);
+            debug_printf("returning E_BADF\n");
+            r = E_BADF;
+            break;
+        }
+
+        fdtable_->fds_[newfd] && fdtable_->fds_[newfd]->deref();
+        fdtable_->fds_[newfd] = fdtable_->fds_[oldfd];
+        fdtable_->fds_[oldfd]->refs_++;
+        fdtable_->lock_.unlock(fdt_irqs);
+
+        r = 0;
         break;
     }
 
