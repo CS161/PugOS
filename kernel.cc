@@ -317,7 +317,8 @@ int seppuku() {
 void proc::exception(regstate* regs) {
     // It can be useful to log events using `log_printf`.
     // Events logged this way are stored in the host's `log.txt` file.
-    /*log_printf("proc %d: exception %d\n", this->pid_, regs->reg_intno);*/
+    if (pid_ > 0)
+        debug_printf("[%d] exception %d\n", pid_, regs->reg_intno);
 
     assert(read_rbp() % 16 == 0);  // check stack alignment
 
@@ -581,7 +582,7 @@ uintptr_t proc::syscall(regstate* regs) {
         if ((regs->reg_rax == SYSCALL_READ && !f->readable_)
             || (regs->reg_rax == SYSCALL_WRITE && !f->writeable_)) {
             fdtable_->lock_.unlock(irqs);
-            r = E_PERM;
+            r = E_BADF;
             debug_printf("returning E_PERM\n");
             break;
         }
