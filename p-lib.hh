@@ -203,6 +203,16 @@ static inline int sys_commit_seppuku() {
     return syscall0(SYSCALL_COMMIT_SEPPUKU);
 }
 
+// sys_log_printf(format, args)
+inline void sys_log_printf(const char* format, ...) {
+    va_list val;
+    va_start(val, format);
+    syscall0(SYSCALL_LOG_PRINTF,
+             reinterpret_cast<uintptr_t>(format),
+             reinterpret_cast<uintptr_t>(&val));
+    va_end(val);
+}
+
 // OTHER HELPER FUNCTIONS
 
 // app_printf(format, ...)

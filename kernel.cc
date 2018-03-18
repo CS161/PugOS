@@ -560,6 +560,14 @@ uintptr_t proc::syscall(regstate* regs) {
         break;
     }
 
+    case SYSCALL_LOG_PRINTF: {
+        const char* format = reinterpret_cast<const char*>(regs->reg_rdi);
+        va_list* args = reinterpret_cast<va_list*>(regs->reg_rsi);
+        log_vprintf(format, *args);
+        r = 0;
+        break;
+    }
+
     case SYSCALL_READ:
     case SYSCALL_WRITE: {
         int fd = regs->reg_rdi;

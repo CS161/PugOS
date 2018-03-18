@@ -125,6 +125,7 @@ inline constexpr T roundup_pow2(T x) {
 #define SYSCALL_GETPPID         10
 #define SYSCALL_WAITPID         11
 #define SYSCALL_COMMIT_SEPPUKU  44
+#define SYSCALL_LOG_PRINTF      69
 #define SYSCALL_KDISPLAY        100
 #define SYSCALL_READ            101
 #define SYSCALL_WRITE           102
