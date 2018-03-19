@@ -1,5 +1,5 @@
-IMAGE = chickadeeos.img
-all: $(IMAGE)
+QEMUIMAGEFILES = chickadeeboot.img chickadeefs.img
+all: $(QEMUIMAGEFILES)
 
 # Place local configuration options, such as `CC=clang`, in
 # `config.mk` so you don't have to list them every time.
@@ -30,7 +30,8 @@ endif
 #
 # `$(NCPU)` controls the number of CPUs QEMU should use. It defaults to 2.
 NCPU = 2
-QEMUOPT = -net none -parallel file:log.txt -smp $(NCPU)
+QEMULOG ?= file:log.txt
+QEMUOPT = -net none -parallel $(QEMULOG) -smp $(NCPU)
 ifneq ($(D),)
 QEMUOPT += -d int,cpu_reset -no-reboot
 endif
@@ -44,46 +45,68 @@ BOOT_OBJS = $(OBJDIR)/bootentry.o $(OBJDIR)/boot.o
 
 KERNEL_OBJS = $(OBJDIR)/k-exception.ko \
 	$(OBJDIR)/kernel.ko $(OBJDIR)/k-alloc.ko $(OBJDIR)/k-vmiter.ko \
-	$(OBJDIR)/k-init.ko $(OBJDIR)/k-hardware.ko $(OBJDIR)/k-devices.ko \
-	$(OBJDIR)/k-cpu.ko $(OBJDIR)/k-proc.ko $(OBJDIR)/k-fs.ko \
-	$(OBJDIR)/k-memviewer.ko $(OBJDIR)/lib.ko
+	$(OBJDIR)/k-init.ko $(OBJDIR)/k-hardware.ko $(OBJDIR)/k-mpspec.ko \
+	$(OBJDIR)/k-devices.ko $(OBJDIR)/k-cpu.ko $(OBJDIR)/k-proc.ko \
+	$(OBJDIR)/k-memviewer.ko $(OBJDIR)/lib.ko $(OBJDIR)/k-fs.ko
 
 PROCESS_LIB_OBJS = $(OBJDIR)/lib.o $(OBJDIR)/p-lib.o
 PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
-	$(OBJDIR)/p-init.o \
 	$(OBJDIR)/p-allocator.o \
 	$(OBJDIR)/p-allocexit.o \
 	$(OBJDIR)/p-cat.o \
+	$(OBJDIR)/p-echo.o \
+	$(OBJDIR)/p-execallocexit.o \
+	$(OBJDIR)/p-exececho.o \
+	$(OBJDIR)/p-false.o \
+	$(OBJDIR)/p-init.o \
+	$(OBJDIR)/p-sh.o \
 	$(OBJDIR)/p-testeintr.o \
+	$(OBJDIR)/p-testmemfs.o \
 	$(OBJDIR)/p-testmsleep.o \
 	$(OBJDIR)/p-testpipe.o \
 	$(OBJDIR)/p-testppid.o \
 	$(OBJDIR)/p-testrwaddr.o \
 	$(OBJDIR)/p-testvfs.o \
 	$(OBJDIR)/p-testwaitpid.o \
-	$(OBJDIR)/p-testzombie.o
+	$(OBJDIR)/p-testzombie.o \
+	$(OBJDIR)/p-true.o \
+	$(OBJDIR)/p-wc.o
 
-FLATFS_CONTENTS = obj/p-init \
+
+INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~' 2>/dev/null) \
 	obj/p-allocator \
 	obj/p-allocexit \
 	obj/p-cat \
+	obj/p-echo \
+	obj/p-execallocexit \
+	obj/p-exececho \
+	obj/p-false \
+	obj/p-init \
+	obj/p-sh \
 	obj/p-testeintr \
+	obj/p-testmemfs \
 	obj/p-testmsleep \
 	obj/p-testpipe \
 	obj/p-testppid \
 	obj/p-testrwaddr \
 	obj/p-testvfs \
 	obj/p-testwaitpid \
-	obj/p-testzombie
+	obj/p-testzombie \
+	obj/p-true \
+	obj/p-wc
+
+
+ifneq ($(strip $(INITFS_CONTENTS)),$(DEP_INITFS_CONTENTS))
+INITFS_BUILDSTAMP := $(shell echo "DEP_INITFS_CONTENTS:=$(INITFS_CONTENTS)" > $(DEPSDIR)/_initfs.d; echo always)
+endif
 
 
 # Define `CHICKADEE_FIRST_PROCESS` if appropriate
 ifneq ($(filter run-%,$(MAKECMDGOALS)),)
 ifeq ($(words $(MAKECMDGOALS)),1)
 RUNCMD_LASTWORD := $(lastword $(subst -, ,$(MAKECMDGOALS)))
-ifneq ($(filter obj/p-$(RUNCMD_LASTWORD),$(FLATFS_CONTENTS)),)
+ifneq ($(filter obj/p-$(RUNCMD_LASTWORD),$(INITFS_CONTENTS)),)
 CPPFLAGS += -DCHICKADEE_FIRST_PROCESS='"$(RUNCMD_LASTWORD)"'
-DEFAULTIMAGE = $(IMAGE)
 $(OBJDIR)/kernel.ko: always
 endif
 endif
@@ -115,17 +138,17 @@ $(OBJDIR)/k-asm.h: kernel.hh build/mkkernelasm.awk $(BUILDSTAMPS)
 	$(call cxxcompile,-dM -E kernel.hh | awk -f build/mkkernelasm.awk | sort > $@,CREATE $@)
 	@if test ! -s $@; then echo '* Error creating $@!' 1>&2; exit 1; fi
 
-$(OBJDIR)/k-flatfs.c: \
-	build/mkflatfs.awk $(FLATFS_CONTENTS) $(BUILDSTAMPS) GNUmakefile
-	$(call run,echo $(FLATFS_CONTENTS) | awk -f build/mkflatfs.awk >,CREATE,$@)
+$(OBJDIR)/k-initfs.cc: \
+	build/mkinitfs.awk $(INITFS_CONTENTS) $(INITFS_BUILDSTAMP) $(BUILDSTAMPS) GNUmakefile
+	$(call run,echo $(INITFS_CONTENTS) | awk -f build/mkinitfs.awk >,CREATE,$@)
 
-$(OBJDIR)/k-proc.ko: $(OBJDIR)/k-flatfs.c
+$(OBJDIR)/k-devices.ko: $(OBJDIR)/k-initfs.cc
 
 
 # How to make binaries and disk images
 
-$(OBJDIR)/kernel.full: $(KERNEL_OBJS) $(FLATFS_CONTENTS) kernel.ld
-	$(call link,-T kernel.ld -o $@ $(KERNEL_OBJS) -b binary $(FLATFS_CONTENTS),LINK)
+$(OBJDIR)/kernel.full: $(KERNEL_OBJS) $(INITFS_CONTENTS) kernel.ld
+	$(call link,-T kernel.ld -o $@ $(KERNEL_OBJS) -b binary $(INITFS_CONTENTS),LINK)
 	@if $(OBJDUMP) -p $@ | grep off | grep -iv 'off[ 0-9a-fx]*000 ' >/dev/null 2>&1; then echo "* Warning: Some sections of kernel object file are not page-aligned." 1>&2; fi
 
 $(OBJDIR)/p-%.full: $(OBJDIR)/p-%.o $(PROCESS_LIB_OBJS) process.ld
@@ -142,43 +165,51 @@ $(OBJDIR)/bootsector: $(BOOT_OBJS) boot.ld
 	$(call run,$(NM) -n $@.full >$@.sym)
 	$(call run,$(OBJCOPY) -S -O binary -j .text $@.full $@)
 
-$(OBJDIR)/mkbootdisk: build/mkbootdisk.c $(BUILDSTAMPS)
-	$(call run,$(HOSTCC) -I. -o $(OBJDIR)/mkbootdisk,HOSTCOMPILE,build/mkbootdisk.c)
+$(OBJDIR)/mkchickadeefs: build/mkchickadeefs.cc $(BUILDSTAMPS)
+	$(call run,$(HOSTCXX) $(CPPFLAGS) $(HOSTCXXFLAGS) $(DEPCFLAGS_AT) -o $@,HOSTCOMPILE,$<)
 
-chickadeeos.img: $(OBJDIR)/mkbootdisk $(OBJDIR)/bootsector $(OBJDIR)/kernel
-	$(call run,$(OBJDIR)/mkbootdisk $(OBJDIR)/bootsector $(OBJDIR)/kernel > $@,CREATE $@)
+$(OBJDIR)/chickadeefsck: build/chickadeefsck.cc $(BUILDSTAMPS)
+	$(call run,$(HOSTCXX) $(CPPFLAGS) $(HOSTCXXFLAGS) $(DEPCFLAGS_AT) -o $@,HOSTCOMPILE,$<)
 
+# If you change the `-f` argument, also change `boot.cc:KERNEL_START_SECTOR`
+chickadeeboot.img: $(OBJDIR)/mkchickadeefs $(OBJDIR)/bootsector $(OBJDIR)/kernel
+	$(call run,$(OBJDIR)/mkchickadeefs -b 4096 -f 16 -s $(OBJDIR)/bootsector $(OBJDIR)/kernel > $@,CREATE $@)
 
-DEFAULTIMAGE ?= %.img
-run-%: run-qemu-%
+chickadeefs.img: $(OBJDIR)/mkchickadeefs $(OBJDIR)/bootsector $(OBJDIR)/kernel
+	$(call run,$(OBJDIR)/mkchickadeefs -b 32768 -f 16 -s $(OBJDIR)/bootsector $(OBJDIR)/kernel $(INITFS_CONTENTS) > $@,CREATE $@)
+
+QEMUIMG = -M q35 \
+        -device piix4-ide,bus=pcie.0,id=piix4-ide \
+	-drive file=chickadeeboot.img,if=none,format=raw,id=bootdisk \
+	-device ide-drive,drive=bootdisk,bus=piix4-ide.0 \
+	-drive file=chickadeefs.img,if=none,format=raw,id=maindisk \
+	-device ide-drive,drive=maindisk,bus=ide.0
+
+run-%: run-$(QEMUDISPLAY)
 	@:
-run-qemu-%: run-$(QEMUDISPLAY)-%
-	@:
-run-graphic-%: $(DEFAULTIMAGE) check-qemu
-	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) $(QEMUIMG),QEMU $<)
-run-console-%: $(DEFAULTIMAGE) check-qemu
-	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -curses $(QEMUIMG),QEMU $<)
-run-monitor-%: $(DEFAULTIMAGE) check-qemu
+run-graphic-%: $(QEMUIMAGEFILES) check-qemu
+	@echo '* Run `gdb -x build/chickadee.gdb` to connect gdb to qemu.' 1>&2
+	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -gdb tcp::12949 $(QEMUIMG),QEMU $<)
+run-console-%: $(QEMUIMAGEFILES) check-qemu
+	@echo '* Run `gdb -x build/chickadee.gdb` to connect gdb to qemu.' 1>&2
+	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -curses -gdb tcp::12949 $(QEMUIMG),QEMU $<)
+run-monitor-%: $(QEMUIMAGEFILES) check-qemu
 	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -monitor stdio $(QEMUIMG),QEMU $<)
 run-gdb-%: run-gdb-$(QEMUDISPLAY)-%
 	@:
-run-gdb-graphic-%: $(DEFAULTIMAGE) check-qemu
-	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -gdb tcp::1234 $(QEMUIMG) &,QEMU $<)
+run-gdb-graphic-%: $(QEMUIMAGEFILES) check-qemu
+	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -gdb tcp::12949 $(QEMUIMG) &,QEMU $<)
 	$(call run,sleep 0.5; gdb -x build/chickadee.gdb,GDB)
-run-gdb-console-%: $(DEFAULTIMAGE) check-qemu
-	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -curses -gdb tcp::1234 $(QEMUIMG),QEMU $<)
+run-gdb-console-%: $(QEMUIMAGEFILES) check-qemu
+	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -curses -gdb tcp::12949 $(QEMUIMG),QEMU $<)
 
-run: run-qemu-$(basename $(IMAGE))
-run-qemu: run-qemu-$(basename $(IMAGE))
-run-graphic: run-graphic-$(basename $(IMAGE))
-run-console: run-console-$(basename $(IMAGE))
-run-monitor: run-monitor-$(basename $(IMAGE))
-run-gdb: run-gdb-$(basename $(IMAGE))
-run-gdb-graphic: run-gdb-graphic-$(basename $(IMAGE))
-run-gdb-console: run-gdb-console-$(basename $(IMAGE))
-run-graphic-gdb: run-gdb-graphic-$(basename $(IMAGE))
-run-console-gdb: run-gdb-console-$(basename $(IMAGE))
-
+run: run-anything
+run-graphic: run-graphic-anything
+run-console: run-console-anything
+run-monitor: run-monitor-anything
+run-gdb: run-gdb-anything
+run-gdb-graphic: run-gdb-graphic-anything
+run-gdb-console: run-gdb-console-anything
 
 # Kill all my qemus
 kill:

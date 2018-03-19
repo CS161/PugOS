@@ -53,6 +53,14 @@ inline uintptr_t syscall0(int syscallno, uintptr_t arg0,
     return rax;
 }
 
+inline void clobber_memory(void* ptr) {
+    asm volatile ("" : "+m" (*(char (*)[]) ptr));
+}
+
+inline void access_memory(const void* ptr) {
+    asm volatile ("" : : "m" (*(const char (*)[]) ptr));
+}
+
 
 // sys_getpid
 //    Return current process ID.
@@ -141,6 +149,7 @@ static inline pid_t sys_waitpid(pid_t pid,
 //    Read bytes from `fd` into `buf`. Read at most `sz` bytes. Return
 //    the number of bytes read, which is 0 at EOF.
 inline ssize_t sys_read(int fd, char* buf, size_t sz) {
+    clobber_memory(buf);
     return syscall0(SYSCALL_READ, fd, reinterpret_cast<uintptr_t>(buf), sz);
 }
 
@@ -148,6 +157,7 @@ inline ssize_t sys_read(int fd, char* buf, size_t sz) {
 //    Write bytes to `fd` from `buf`. Write at most `sz` bytes. Return
 //    the number of bytes written.
 inline ssize_t sys_write(int fd, const char* buf, size_t sz) {
+    access_memory(buf);
     return syscall0(SYSCALL_WRITE, fd, reinterpret_cast<uintptr_t>(buf), sz);
 }
 
@@ -163,6 +173,14 @@ inline int sys_close(int fd) {
     return syscall0(SYSCALL_CLOSE, fd);
 }
 
+// sys_open(path, flags)
+//    Open a new file descriptor for pathname `path`. `flags` should
+//    contain at least one of `OF_READ` and `OF_WRITE`.
+inline int sys_open(const char* path, int flags) {
+    return syscall0(SYSCALL_OPEN, reinterpret_cast<uintptr_t>(path),
+                    flags);
+}
+
 // sys_pipe(pfd)
 //    Create a pipe.
 inline int sys_pipe(int pfd[2]) {
@@ -175,11 +193,33 @@ inline int sys_pipe(int pfd[2]) {
     return r;
 }
 
-// sys_execv(program_name, argv)
-inline int sys_execv(const char* program_name, char* const argv[]) {
+// sys_execv(program_name, argv, argc)
+//    Replace this process image with a new image running `program_name`
+//    with `argc` arguments, stored in argument array `argv`. Returns
+//    only on failure.
+inline int sys_execv(const char* program_name, const char* const* argv,
+                     size_t argc) {
     return syscall0(SYSCALL_EXECV,
                     reinterpret_cast<uintptr_t>(program_name),
-                    reinterpret_cast<uintptr_t>(argv));
+                    reinterpret_cast<uintptr_t>(argv), argc);
+}
+
+// sys_execv(program_name, argv)
+//    Replace this process image with a new image running `program_name`
+//    with arguments `argv`. `argv` is a null-terminated array. Returns
+//    only on failure.
+inline int sys_execv(const char* program_name, const char* const* argv) {
+    size_t argc = 0;
+    while (argv && argv[argc] != nullptr) {
+        ++argc;
+    }
+    return sys_execv(program_name, argv, argc);
+}
+
+// sys_unlink(pathname)
+//    Remove the file named `pathname`.
+inline int sys_unlink(const char* pathname) {
+    return syscall0(SYSCALL_UNLINK, reinterpret_cast<uintptr_t>(pathname));
 }
 
 // sys_panic(msg)
@@ -220,10 +260,5 @@ inline void sys_log_printf(const char* format, ...) {
 //    `cursorpos`, a shared variable defined by the kernel, and written back
 //    into that variable. The initial color is based on the current process ID.
 void app_printf(int colorid, const char* format, ...);
-
-
-extern "C" {
-void process_main(void);
-}
 
 #endif

@@ -98,18 +98,14 @@ void annihilate(proc* p) {
 
 
 // cpustate::enqueue(p)
-//    Enqueue `p` on this CPU's run queue. Does nothing if `p` is
-//    already on some run queue. `p` must be resumable (or not
-//    runnable), and `this->runq_lock_` must be held.
+//    Enqueue `p` on this CPU's run queue. `this->runq_lock_` must
+//    be locked. Does nothing if `p` is on a run queue or is currently
+//    running on this CPU. Otherwise `p` must be resumable (or not
+//    runnable).
 
 void cpustate::enqueue(proc* p) {
-    if (!(p->resumable() || p->state_ != proc::runnable)) {
-        debug_printf("Bad enqueue: pid %d on cpu %d, state %s, %sresumable\n",
-            p->pid_, lapic_id_, state_string(p), p->resumable() ? "" : "not ");
-    }
-
-    assert(p->resumable() || p->state_ != proc::runnable);
-    if (!p->runq_links_.is_linked()) {
+    if (current_ != p && !p->runq_links_.is_linked()) {
+        assert(p->resumable() || p->state_ != proc::runnable);
         runq_.push_back(p);
     }
 }
@@ -163,12 +159,13 @@ void cpustate::schedule(proc* yielding_from) {
 
         // otherwise load the next process from the run queue
         runq_lock_.lock_noirq();
-        if (current_) {
-            // re-enqueue `current_` at end of run queue if runnable
-            if (current_->state_ == proc::runnable) {
-                enqueue(current_);
+        if (proc* p = current_) {
+            current_ = yielding_from = nullptr;
+            // re-enqueue `p` at end of run queue if runnable
+            if (p->state_ == proc::runnable) {
+                enqueue(p);
             }
-
+            
             // switch to a safe page table
             lcr3(ktext2pa(early_pagetable));
         

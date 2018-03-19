@@ -11,6 +11,8 @@ void process_main(void) {
     asm volatile("movq %%rbp,%0" : "=r" (rbp));
     assert(rbp % 16 == 0);
 
+    sys_kdisplay(KDISPLAY_MEMVIEWER);
+
     // Fork three new copies. (But ignore failures.)
     (void) sys_fork();
     (void) sys_fork();

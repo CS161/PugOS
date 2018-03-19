@@ -28,7 +28,7 @@ file::~file() {
 	assert(vnode_->refs_ >= 0);
 
 	if (type_ == file::pipe && vnode_->bb_) {
-		auto irqs = vnode_->bb_->lock_.lock();
+		vnode_->bb_->lock_.lock_noirq();
 		if (type_ == file::pipe && readable_) {
 			vnode_->bb_->read_closed_ = true;
 			vnode_->bb_->nonfull_wq_.wake_all();
@@ -37,7 +37,7 @@ file::~file() {
 			vnode_->bb_->write_closed_ = true;
 			vnode_->bb_->nonempty_wq_.wake_all();
 		}
-		vnode_->bb_->lock_.unlock(irqs);
+		vnode_->bb_->lock_.unlock_noirq();
 	}
 
 	auto refs = vnode_->refs_;

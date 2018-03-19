@@ -20,9 +20,13 @@ size_t strlen(const char* s);
 size_t strnlen(const char* s, size_t maxlen);
 char* strcpy(char* dst, const char* src);
 int strcmp(const char* a, const char* b);
+int strncmp(const char* a, const char* b, size_t maxlen);
 char* strchr(const char* s, int c);
+long strtol(const char* s, char** endptr = nullptr, int base = 0);
+unsigned long strtoul(const char* s, char** endptr = nullptr, int base = 0);
 int snprintf(char* s, size_t size, const char* format, ...);
 int vsnprintf(char* s, size_t size, const char* format, va_list val);
+inline bool isspace(unsigned char c);
 }
 
 #define RAND_MAX 0x7FFFFFFF
@@ -40,18 +44,26 @@ int rand(int min, int max);
 #define arraysize(array)        (sizeof(array) / sizeof(array[0]))
 
 
-// Assertions
+// Type information
 
-// assert(x)
-//    If `x == 0`, print a message and fail.
-#define assert(x) \
-        do { if (!(x)) assert_fail(__FILE__, __LINE__, #x); } while (0)
-void assert_fail(const char* file, int line, const char* msg)
-    __attribute__((noinline, noreturn));
+// printfmt<T>
+//    `printfmt<T>::spec` defines a printf specifier for type T.
+//    E.g., `printfmt<int>::spec` is `"d"`.
 
-// panic(format, ...)
-//    Print the message determined by `format` and fail.
-void panic(const char* format, ...) __attribute__((noinline, noreturn));
+template <typename T> struct printfmt {};
+template <> struct printfmt<bool>           { static constexpr char spec[] = "d"; };
+template <> struct printfmt<char>           { static constexpr char spec[] = "c"; };
+template <> struct printfmt<signed char>    { static constexpr char spec[] = "d"; };
+template <> struct printfmt<unsigned char>  { static constexpr char spec[] = "u"; };
+template <> struct printfmt<short>          { static constexpr char spec[] = "d"; };
+template <> struct printfmt<unsigned short> { static constexpr char spec[] = "u"; };
+template <> struct printfmt<int>            { static constexpr char spec[] = "d"; };
+template <> struct printfmt<unsigned>       { static constexpr char spec[] = "u"; };
+template <> struct printfmt<long>           { static constexpr char spec[] = "ld"; };
+template <> struct printfmt<unsigned long>  { static constexpr char spec[] = "lu"; };
+template <typename T> struct printfmt<T*>   { static constexpr char spec[] = "p"; };
+
+template <typename T> constexpr char printfmt<T*>::spec[];
 
 
 // Min, max, and rounding operations
@@ -111,6 +123,13 @@ inline constexpr T roundup_pow2(T x) {
 }
 
 
+// Character traits
+
+inline bool isspace(unsigned char ch) {
+    return (ch >= '\t' && ch <= '\r') || ch == ' ';
+}
+
+
 // System call numbers: an application calls `int NUM` to call a system call
 
 #define SYSCALL_GETPID          1
@@ -133,6 +152,8 @@ inline constexpr T roundup_pow2(T x) {
 #define SYSCALL_DUP2            104
 #define SYSCALL_PIPE            105
 #define SYSCALL_EXECV           106
+#define SYSCALL_OPEN            107
+#define SYSCALL_UNLINK          108
 
 
 // System call error return values
@@ -141,18 +162,22 @@ inline constexpr T roundup_pow2(T x) {
 #define E_BADF          -9         // Bad file number
 #define E_CHILD         -10        // No child processes
 #define E_FAULT         -14        // Bad address
+#define E_FBIG          -27        // File too large
 #define E_INTR          -4         // Interrupted system call
 #define E_INVAL         -22        // Invalid argument
 #define E_IO            -5         // I/O error
 #define E_MFILE         -24        // Too many open files
 #define E_NFILE         -23        // File table overflow
+#define E_NOENT         -2         // No such file or directory
 #define E_NOEXEC        -8         // Exec format error
 #define E_NOMEM         -12        // Out of memory
+#define E_NOSPC         -28        // No space left on device
 #define E_NOSYS         -38        // Invalid system call number
 #define E_NXIO          -6         // No such device or address
 #define E_PERM          -1         // Operation not permitted
 #define E_PIPE          -32        // Broken pipe
 #define E_SRCH          -3         // No such process
+#define E_TXTBSY        -26        // Text file busy
 #define E_2BIG          -7         // Argument list too long
 
 #define E_MINERROR      -100
@@ -170,6 +195,12 @@ inline bool is_error(uintptr_t r) {
 
 // sys_waitpid() options
 #define W_NOHANG                1
+
+// sys_open() flags
+#define OF_READ                 1
+#define OF_WRITE                2
+#define OF_CREATE               4
+#define OF_TRUNC                8
 
 
 // Console printing
@@ -230,5 +261,106 @@ struct printer {
 };
 
 void printer_vprintf(printer* p, int color, const char* format, va_list val);
+
+
+// error_printf(cursor, color, format, ...)
+//    Like `console_printf`, but `color` defaults to `COLOR_ERROR`, and
+//    in the kernel, the message is also printed to the log.
+int error_printf(int cpos, int color, const char* format, ...)
+    __attribute__((noinline, cold));
+int error_vprintf(int cpos, int color, const char* format, va_list val)
+    __attribute__((noinline, cold));
+void error_printf(int color, const char* format, ...)
+    __attribute__((noinline, cold));
+void error_printf(const char* format, ...)
+    __attribute__((noinline, cold));
+
+
+// Assertions
+
+// assert(x)
+//    If `x == 0`, print a message and fail.
+#define assert(x)           do {                                        \
+        if (!(x)) {                                                     \
+            assert_fail(__FILE__, __LINE__, #x);                        \
+        }                                                               \
+    } while (0)
+void __attribute__((noinline, noreturn, cold))
+assert_fail(const char* file, int line, const char* msg);
+
+// assert_eq(x, y)
+//    Like `assert(x == y)`, but on failure prints the values of `x` and `y`.
+#define assert_eq(x, y)     do {                                        \
+        auto __x = (x); auto __y = (y);                                 \
+        using __t = std::common_type<typeof(__x), typeof(__y)>::type;   \
+        if (__x != __y) {                                               \
+            assert_eq_fail<__t>(__FILE__, __LINE__, #x " == " #y, __x, __y); \
+        }                                                               \
+    } while (0)
+template <typename T>
+void __attribute__((noinline, noreturn, cold))
+assert_eq_fail(const char* file, int line, const char* msg, T x, T y) {
+    char fmt[32];
+    snprintf(fmt, sizeof(fmt), "%%s:%%d: %%%s != %%%s\n",
+             printfmt<T>::spec, printfmt<T>::spec);
+    error_printf(CPOS(22, 0), COLOR_ERROR, fmt, file, line, x, y);
+    assert_fail(file, line, msg);
+}
+
+// assert_ne(x, y)
+//    Like `assert(x != y)`, but on failure prints the values of `x` and `y`.
+#define assert_ne(x, y)     do {                                        \
+        auto __x = (x); auto __y = (y);                                 \
+        using __t = std::common_type<typeof(__x), typeof(__y)>::type;   \
+        if (__x == __y) {                                               \
+            assert_ne_fail<__t>(__FILE__, __LINE__, #x " != " #y, __x, __y); \
+        }                                                               \
+    } while (0)
+template <typename T>
+void __attribute__((noinline, noreturn, cold))
+assert_ne_fail(const char* file, int line, const char* msg, T x, T y) {
+    char fmt[32];
+    snprintf(fmt, sizeof(fmt), "%%s:%%d: %%%s == %%%s\n",
+             printfmt<T>::spec, printfmt<T>::spec);
+    error_printf(CPOS(22, 0), COLOR_ERROR, fmt, file, line, x, y);
+    assert_fail(file, line, msg);
+}
+
+// assert_gt(x, y)
+//    Like `assert(x > y)`, but on failure prints the values of `x` and `y`.
+#define assert_gt(x, y)     do {                                        \
+        auto __x = (x); auto __y = (y);                                 \
+        using __t = std::common_type<typeof(__x), typeof(__y)>::type;   \
+        if (__x <= __y) {                                               \
+            assert_gt_fail<__t>(__FILE__, __LINE__, #x " > " #y, __x, __y); \
+        }                                                               \
+    } while (0)
+template <typename T>
+void __attribute__((noinline, noreturn, cold))
+assert_gt_fail(const char* file, int line, const char* msg, T x, T y) {
+    char fmt[32];
+    snprintf(fmt, sizeof(fmt), "%%s:%%d: %%%s <= %%%s\n",
+             printfmt<T>::spec, printfmt<T>::spec);
+    error_printf(CPOS(22, 0), COLOR_ERROR, fmt, file, line, x, y);
+    assert_fail(file, line, msg);
+}
+
+// assert_memeq(x, y, sz)
+//    If `memcmp(x, y, sz) != 0`, print a message and fail.
+#define assert_memeq(x, y, sz)    do {                                  \
+        auto __x = (x); auto __y = (y); size_t __sz = (sz);             \
+        if (memcmp(__x, __y, __sz) != 0) {                              \
+            assert_memeq_fail(__FILE__, __LINE__, "memcmp(" #x ", " #y ", " #sz ") == 0", __x, __y, __sz); \
+        }                                                               \
+    } while (0)
+void __attribute__((noinline, noreturn, cold))
+assert_memeq_fail(const char* file, int line, const char* msg,
+                  const char* x, const char* y, size_t sz);
+
+
+// panic(format, ...)
+//    Print the message determined by `format` and fail.
+void __attribute__((noinline, noreturn, cold))
+panic(const char* format, ...);
 
 #endif /* !CHICKADEE_LIB_H */

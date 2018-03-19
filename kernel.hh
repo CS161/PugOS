@@ -186,7 +186,7 @@ extern memrangeset<16> physical_ranges;
 
 
 // Hardware interrupt numbers
-#define INT_IRQ                 32
+#define INT_IRQ                 32U
 #define IRQ_TIMER               0
 #define IRQ_KEYBOARD            1
 #define IRQ_IDE                 14
@@ -237,6 +237,16 @@ inline uint64_t ka2pa(T* ptr) {
     return ka2pa(reinterpret_cast<uint64_t>(ptr));
 }
 
+inline uint64_t kptr2pa(uint64_t kptr) {
+    assert(kptr >= HIGHMEM_BASE);
+    return kptr - (kptr >= KTEXT_BASE ? KTEXT_BASE : HIGHMEM_BASE);
+}
+
+template <typename T>
+inline uint64_t kptr2pa(T* ptr) {
+    return kptr2pa(reinterpret_cast<uint64_t>(ptr));
+}
+
 template <typename T>
 inline bool is_kptr(T* ptr) {
     uintptr_t va = reinterpret_cast<uint64_t>(ptr);
@@ -256,17 +266,14 @@ template <>
 inline uint16_t read_unaligned<uint16_t>(const uint8_t* ptr) {
     return ptr[0] | (ptr[1] << 8);
 }
-
 template <>
 inline int16_t read_unaligned<int16_t>(const uint8_t* ptr) {
     return ptr[0] | (ptr[1] << 8);
 }
-
 template <>
 inline uint32_t read_unaligned<uint32_t>(const uint8_t* ptr) {
     return ptr[0] | (ptr[1] << 8) | (ptr[2] << 16) | (ptr[3] << 24);
 }
-
 template <>
 inline int32_t read_unaligned<int32_t>(const uint8_t* ptr) {
     return ptr[0] | (ptr[1] << 8) | (ptr[2] << 16) | (ptr[3] << 24);
@@ -300,6 +307,14 @@ template <typename T>
 inline T* knew() {
     if (void* mem = kalloc(sizeof(T))) {
         return new (mem) T;
+    } else {
+        return nullptr;
+    }
+}
+template <typename T, typename... Args>
+inline T* knew(Args&&... args) {
+    if (void* mem = kalloc(sizeof(T))) {
+        return new (mem) T(std::forward<Args>(args)...);
     } else {
         return nullptr;
     }
@@ -349,6 +364,13 @@ void test_kalloc();
 // initialize hardware and CPUs
 void init_hardware();
 
+// query machine configuration
+unsigned machine_ncpu();
+unsigned machine_pci_irq(int pci_addr, int intr_pin);
+
+struct ahcistate;
+extern ahcistate* sata_disk;
+
 
 // kernel page table (used for virtual memory)
 extern x86_64_pagetable early_pagetable[3];
@@ -377,14 +399,6 @@ void kernel_start(const char* command);
 void console_show_cursor(int cpos);
 
 
-// program_load(p, programnumber)
-//    Load the code corresponding to program `programnumber` into the process
-//    `p` and set `p->p_reg.reg_eip` to its entry point. Calls
-//    `assign_physical_page` as required. Returns 0 on success and
-//    -1 on failure (e.g. out-of-memory). `allocator` is passed to
-//    `vm_map`.
-int program_load(proc* p, int programnumber);
-
 // log_printf, log_vprintf
 //    Print debugging messages to the host's `log.txt` file. We run QEMU
 //    so that messages written to the QEMU "parallel port" end up in `log.txt`.
@@ -400,16 +414,6 @@ void debug_printf_(const char* file, const char* func, int line,
 //    Print a backtrace to the host's `log.txt` file.
 void log_backtrace(const char* prefix = "");
 
-
-// error_printf, error_vprintf
-//    Print debugging messages to the console and to the host's
-//    `log.txt` file via `log_printf`.
-int error_printf(int cpos, int color, const char* format, ...)
-    __attribute__((noinline));
-void error_printf(int color, const char* format, ...) __attribute__((noinline));
-void error_printf(const char* format, ...) __attribute__((noinline));
-int error_vprintf(int cpos, int color, const char* format, va_list val)
-    __attribute__((noinline));
 
 // `panicking == true` iff some CPU has panicked
 extern bool panicking;

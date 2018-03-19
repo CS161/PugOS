@@ -8,7 +8,7 @@
 
 extern "C" {
 
-// memcpy, memmove, memset, strcmp, strlen, strnlen
+// memcpy, memmove, memset, strlen, strnlen, strcmp, strncmp
 //    We must provide our own implementations.
 
 void* memcpy(void* dst, const void* src, size_t n) {
@@ -85,6 +85,14 @@ int strcmp(const char* a, const char* b) {
         - ((unsigned char) *a < (unsigned char) *b);
 }
 
+int strncmp(const char* a, const char* b, size_t n) {
+    while (n && *a && *b && *a == *b) {
+        ++a, ++b, --n;
+    }
+    return n ? ((unsigned char) *a > (unsigned char) *b)
+        - ((unsigned char) *a < (unsigned char) *b) : 0;
+}
+
 char* strchr(const char* s, int c) {
     while (*s && *s != (char) c) {
         ++s;
@@ -94,6 +102,75 @@ char* strchr(const char* s, int c) {
     } else {
         return NULL;
     }
+}
+
+unsigned long strtoul(const char* s, char** endptr, int base) {
+    while (isspace(*s)) {
+        ++s;
+    }
+    bool negative = *s == '-';
+    s += negative || *s == '+';
+    if (base == 0) {
+        if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+            base = 16;
+            s += 2;
+        } else if (s[0] == '0') {
+            base = 8;
+        } else {
+            base = 10;
+        }
+    } else if (base == 16 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+        s += 2;
+    }
+    unsigned long x = 0;
+    bool overflow = false;
+    while (1) {
+        unsigned digit;
+        if (*s >= '0' && *s < '0' + base) {
+            digit = *s - '0';
+        } else if (base > 10 && *s >= 'a' && *s < 'a' + base - 10) {
+            digit = *s - 'a' + 10;
+        } else if (base > 10 && *s >= 'A' && *s < 'A' + base - 10) {
+            digit = *s - 'A' + 10;
+        } else {
+            break;
+        }
+        if (x > (-1UL - digit) / base) {
+            overflow = true;
+        } else {
+            x = x * base + digit;
+        }
+        ++s;
+    }
+    if (endptr) {
+        *endptr = const_cast<char*>(s);
+    }
+    if (overflow) {
+        x = -1UL;
+    }
+    if (negative) {
+        x = -x;
+    }
+    return x;
+}
+
+long strtol(const char* s, char** endptr, int base) {
+    while (isspace(*s)) {
+        ++s;
+    }
+    bool negative = *s == '-';
+    if (negative) {
+        ++s;
+    }
+    unsigned long u = strtoul(s, endptr, base);
+    unsigned long bound = (1UL << (8 * sizeof(unsigned long) - 1)) - !negative;
+    if (u > bound) {
+        u = bound;
+    }
+    if (negative) {
+        u = -u;
+    }
+    return long(u);
 }
 
 } // extern "C"
@@ -128,6 +205,20 @@ int rand(int min, int max) {
     unsigned long r = rand();
     return min + (r * (max - min + 1)) / ((unsigned long) RAND_MAX + 1);
 }
+
+
+// declare printfmt specializations (g++-6 requires)
+
+constexpr char printfmt<bool>::spec[];
+constexpr char printfmt<char>::spec[];
+constexpr char printfmt<signed char>::spec[];
+constexpr char printfmt<unsigned char>::spec[];
+constexpr char printfmt<short>::spec[];
+constexpr char printfmt<unsigned short>::spec[];
+constexpr char printfmt<int>::spec[];
+constexpr char printfmt<unsigned>::spec[];
+constexpr char printfmt<long>::spec[];
+constexpr char printfmt<unsigned long>::spec[];
 
 
 // console_vprintf, console_printf
@@ -300,9 +391,11 @@ void printer_vprintf(printer* p, int color, const char* format, va_list val) {
         }
 
         int zeros;
-        if ((flags & FLAG_NUMERIC) && precision >= 0) {
+        if ((flags & FLAG_NUMERIC)
+            && precision >= 0) {
             zeros = precision > datalen ? precision - datalen : 0;
-        } else if ((flags & FLAG_NUMERIC) && (flags & FLAG_ZERO)
+        } else if ((flags & FLAG_NUMERIC)
+                   && (flags & FLAG_ZERO)
                    && !(flags & FLAG_LEFTJUSTIFY)
                    && datalen + (int) strlen(prefix) < width) {
             zeros = width - datalen - strlen(prefix);
@@ -438,6 +531,31 @@ int snprintf(char* s, size_t size, const char* format, ...) {
 }
 
 
+// k-hardware.cc/p-lib.cc must supply error_vprintf
+
+int error_printf(int cpos, int color, const char* format, ...) {
+    va_list val;
+    va_start(val, format);
+    cpos = error_vprintf(cpos, color, format, val);
+    va_end(val);
+    return cpos;
+}
+
+void error_printf(int color, const char* format, ...) {
+    va_list val;
+    va_start(val, format);
+    error_vprintf(-1, color, format, val);
+    va_end(val);
+}
+
+void error_printf(const char* format, ...) {
+    va_list val;
+    va_start(val, format);
+    error_vprintf(-1, COLOR_ERROR, format, val);
+    va_end(val);
+}
+
+
 // console_clear
 //    Erases the console and moves the cursor to the upper left (CPOS(0, 0)).
 
@@ -446,6 +564,25 @@ void console_clear() {
         console[i] = ' ' | 0x0700;
     }
     cursorpos = 0;
+}
+
+
+void assert_memeq_fail(const char* file, int line, const char* msg,
+                       const char* x, const char* y, size_t sz) {
+    size_t pos = 0;
+    while (pos < sz && x[pos] == y[pos]) {
+        ++pos;
+    }
+    size_t spos = pos <= 10 ? 0 : pos - 10;
+    size_t epos = pos + 10 < sz ? pos + 10 : sz;
+    const char* ellipsis1 = spos > 0 ? "..." : "";
+    const char* ellipsis2 = epos < sz ? "..." : "";
+    error_printf(CPOS(22, 0), COLOR_ERROR,
+                 "%s:%d: \"%s%.*s%s\" != \"%s%.*s%s\" @%zu\n",
+                 file, line,
+                 ellipsis1, int(epos - spos), x + spos, ellipsis2,
+                 ellipsis1, int(epos - spos), y + spos, ellipsis2, pos);
+    assert_fail(file, line, msg);
 }
 
 
