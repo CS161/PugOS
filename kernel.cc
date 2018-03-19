@@ -232,11 +232,8 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
 
     // clone ogproc's fdtable
     auto fdt_irqs = ogproc->fdtable_->lock_.lock();
-    // only copy the fds, not refs or the lock
-    memcpy((void*) fproc->fdtable_->fds_, (void*) ogproc->fdtable_->fds_,
-           NFDS * sizeof(file*));
-    for (unsigned i = 0; fproc->fdtable_->fds_[i] && i < NFDS; i++) {
-        auto f = fproc->fdtable_->fds_[i];
+    for (unsigned i = 0; i < NFDS && ogproc->fdtable_->fds_[i]; i++) {
+        auto f = fproc->fdtable_->fds_[i] = ogproc->fdtable_->fds_[i];
         f->lock_.lock_noirq();
         f->refs_++;
         f->vnode_->lock_.lock_noirq();
