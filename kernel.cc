@@ -34,16 +34,25 @@ void kernel_start(const char* command) {
     }
 
     auto irqs = ptable_lock.lock();
-    process_setup(1, "init");
-    const char* pname;
+    const char* proc_name;
 #ifdef CHICKADEE_FIRST_PROCESS
-    // make run-NAMEHERE
-    pname = CHICKADEE_FIRST_PROCESS;
+    // make run-proc_name
+    proc_name = CHICKADEE_FIRST_PROCESS;
 #else
     // manual entry
-    pname = "testzombie";
+    proc_name = "testzombie";
 #endif
-    process_setup(2, pname);
+
+    // old tests that want to run on pid 1
+    if (proc_name == "allocexit"
+          || proc_name == "allocator") {
+        process_setup(1, proc_name);
+    }
+    // newer programs that expect an init process
+    else {
+        process_setup(1, "init");
+        process_setup(2, proc_name);
+    }
     ptable_lock.unlock(irqs);
 
     // Switch to the first process
@@ -192,14 +201,16 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
 
     // allocate proc, store in ptable
     proc* fproc = ptable[fpid] = kalloc_proc();
+    ptable_lock.unlock(irqs);
     if (!fproc) {
-        ptable_lock.unlock(irqs);
         return -1;
     }
+    fproc->state_ = proc::broken;
 
     // allocate pagetable
     x86_64_pagetable* fpt = fproc->pagetable_ = kalloc_pagetable();
     if (!fpt) {
+        irqs = ptable_lock.lock();
         ptable[fpid] = nullptr;
         kdelete(fproc);
         ptable_lock.unlock(irqs);
@@ -208,34 +219,33 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
 
     // initialize proc data
     fproc->init_user(fpid, fpt);    // note: sets registers wrong
-    fproc->state_ = proc::broken;
+    
 
     // set up process hierarchy
     fproc->ppid_ = ogproc->pid_;
-    fproc->children_.reset();
     ogproc->children_.push_back(fproc);
-    ptable_lock.unlock(irqs);
+    
 
-    // allocate fdtable
-    fproc->fdtable_ = knew<fdtable>();
-    if (!fproc->fdtable_) {
-        irqs = ptable_lock.lock();
-        kdelete(fpt);
-        kdelete(fproc);
-        ptable[fpid] = nullptr;
-        ptable_lock.unlock(irqs);
-        return -1;
-    }
+    // // allocate fdtable
+    // fproc->fdtable_ = knew<fdtable>();
+    // if (!fproc->fdtable_) {
+    //     irqs = ptable_lock.lock();
+    //     kdelete(fpt);
+    //     kdelete(fproc);
+    //     ptable[fpid] = nullptr;
+    //     ptable_lock.unlock(irqs);
+    //     return -1;
+    // }
 
-    // clone ogproc's fdtable
-    auto fdt_irqs = ogproc->fdtable_->lock_.lock();
-    // only copy the fds, not refs or the lock
-    memcpy((void*) fproc->fdtable_->fds_, (void*) ogproc->fdtable_->fds_,
-           NFDS * sizeof(file*));
-    for (unsigned i = 0; fproc->fdtable_->fds_[i] && i < NFDS; i++) {
-        fproc->fdtable_->fds_[i]->refs_++;
-    }
-    ogproc->fdtable_->lock_.unlock(fdt_irqs);
+    // // clone ogproc's fdtable
+    // auto fdt_irqs = ogproc->fdtable_->lock_.lock();
+    // // only copy the fds, not refs or the lock
+    // memcpy((void*) fproc->fdtable_->fds_, (void*) ogproc->fdtable_->fds_,
+    //        NFDS * sizeof(file*));
+    // for (unsigned i = 0; fproc->fdtable_->fds_[i] && i < NFDS; i++) {
+    //     fproc->fdtable_->fds_[i]->refs_++;
+    // }
+    // ogproc->fdtable_->lock_.unlock(fdt_irqs);
 
 
 
@@ -246,7 +256,7 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
                 && source.pa() != ktext2pa(console)) {
             void* npage_ka = kallocpage();
             if (npage_ka == nullptr) {
-                process_exit(fproc);
+                process_reap(fpid);
                 return -1;
             }
             uintptr_t npage_pa = ka2pa(npage_ka);
@@ -255,13 +265,13 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
                 PAGESIZE);
             if (vmiter(fpt, source.va()).map(npage_pa, source.perm()) < 0) {
                 kfree(npage_ka);
-                process_exit(fproc);
+                process_reap(fpid);
                 return -1;
             }
         }
         else if (source.user()) {
             if (vmiter(fpt, source.va()).map(source.pa(), source.perm()) < 0) {
-                process_exit(fproc);
+                process_reap(fpid);
                 return -1;
             }
         }
@@ -278,7 +288,6 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
     cpus[cpu].runq_lock_.lock_noirq();
     debug_printf("[%d] process_fork enqueueing pid %d\n",
                  ogproc->pid_, fproc->pid_);
-    fproc->state_ = proc::runnable;
     cpus[cpu].enqueue(fproc);
     cpus[cpu].runq_lock_.unlock_noirq();
 
