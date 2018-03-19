@@ -54,7 +54,7 @@ struct fdtable {
 	int refs_; // for threading
 	file* fds_[NFDS]; // LENGTH: global constant
 
-	fdtable() : fds_{nullptr} { };
+	fdtable() : refs_(1), fds_{nullptr} { };
 	~fdtable();
 };
 

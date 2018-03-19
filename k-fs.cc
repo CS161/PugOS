@@ -2,6 +2,8 @@
 #include "k-devices.hh"
 
 
+// file
+
 // returns 1 if it freed itself, 0 if it still exists
 int file::deref() {
 	refs_--;
@@ -24,6 +26,8 @@ file::~file() {
 }
 
 
+// fdtable
+
 fdtable::~fdtable() {
     for (unsigned i = 0; fds_[i] && i < NFDS; i++) {
         fds_[i]->deref();
@@ -31,6 +35,8 @@ fdtable::~fdtable() {
 }
 
 
+
+// vn_keyboard_console
 
 size_t vn_keyboard_console::read(uintptr_t buf, size_t sz) {
 	auto& kbd = keyboardstate::get();
@@ -86,6 +92,8 @@ size_t vn_keyboard_console::write(uintptr_t buf, size_t sz) {
 }
 
 
+
+// vn_pipe
 
 size_t vn_pipe::read(uintptr_t buf, size_t sz) {
     size_t pos = 0;
