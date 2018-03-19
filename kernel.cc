@@ -44,8 +44,8 @@ void kernel_start(const char* command) {
 #endif
 
     // old tests that want to run on pid 1
-    if (proc_name == "allocexit"
-          || proc_name == "allocator") {
+    if (!strcmp(proc_name, "allocexit")
+          || !strcmp(proc_name, "allocator")) {
         process_setup(1, proc_name);
     }
     // newer programs that expect an init process
