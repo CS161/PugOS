@@ -653,26 +653,6 @@ uintptr_t proc::syscall(regstate* regs) {
         break;
     }
 
-    case SYSCALL_CLOSE: {
-        int fd = regs->reg_rdi;
-
-        debug_printf("[%d] sys_close(%d)\n", pid_, fd);
-        auto irqs = fdtable_->lock_.lock();
-        if (fd < 0 || fd >= NFDS || fdtable_->fds_[fd] == nullptr) {
-            fdtable_->lock_.unlock(irqs);
-            debug_printf("returning E_BADF\n");
-            r = E_BADF;
-            break;
-        }
-
-        fdtable_->fds_[fd]->deref();
-        fdtable_->fds_[fd] = nullptr;
-        fdtable_->lock_.unlock(irqs);
-
-        r = 0;
-        break;
-    }
-
     case SYSCALL_DUP2: {
         int oldfd = regs->reg_rdi;
         int newfd = regs->reg_rsi;
@@ -693,6 +673,70 @@ uintptr_t proc::syscall(regstate* regs) {
         fdtable_->lock_.unlock(irqs);
 
         r = 0;
+        break;
+    }
+
+    case SYSCALL_CLOSE: {
+        int fd = regs->reg_rdi;
+
+        debug_printf("[%d] sys_close(%d)\n", pid_, fd);
+        auto irqs = fdtable_->lock_.lock();
+        if (fd < 0 || fd >= NFDS || fdtable_->fds_[fd] == nullptr) {
+            fdtable_->lock_.unlock(irqs);
+            debug_printf("returning E_BADF\n");
+            r = E_BADF;
+            break;
+        }
+
+        fdtable_->fds_[fd]->deref();
+        fdtable_->fds_[fd] = nullptr;
+        fdtable_->lock_.unlock(irqs);
+
+        r = 0;
+        break;
+    }
+
+    case SYSCALL_PIPE: {
+        int fd1 = -1;
+        int fd2 = -1;
+
+        auto irqs = fdtable_->lock_.lock();
+        for(int i = 0; i < NFDS; i++) {
+            if (!fdtable_->fds_[i] && !fd1) {
+                fd1 = i;
+            }
+            else if (!fdtable_->fds_[i] && !fd2) {
+                fd2 = i;
+                break;
+            }
+        }
+
+        // not enough open fds
+        if (fd1 < 0 || fd2 < 0) {
+            fdtable_->lock_.unlock(irqs);
+            r = -1; // FIXME: RETURN CORRECT ERROR CODE
+            break;
+        }
+
+        auto file1 = fdtable_->fds_[fd1] = knew<file>();
+        auto file2 = fdtable_->fds_[fd2] = knew<file>();
+        auto pipe_vnode = knew<vn_pipe>();
+        if (!file1 || !file2 || !pipe_vnode) {
+            fdtable_->fds_[fd1] = fdtable_->fds_[fd2] = nullptr;
+            kdelete(file1);
+            kdelete(file2);
+            kdelete(pipe_vnode);
+            fdtable_->lock_.unlock(irqs);
+            r = -1; // FIXME: RETURN CORRECT ERROR CODE
+            break;
+        }
+
+        file1->vnode_ = file2 ->vnode_ = pipe_vnode;
+        pipe_vnode->refs_ = 2;
+
+        fdtable_->lock_.unlock(irqs);
+
+        r = fd1 | (fd2 << 32);
         break;
     }
 
