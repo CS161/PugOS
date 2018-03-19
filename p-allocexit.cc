@@ -1,10 +1,12 @@
 #include "p-lib.hh"
-#define ALLOC_SLOWDOWN 1
+#define ALLOC_SLOWDOWN 100
 
 extern uint8_t end[];
 
 uint8_t* heap_top;
 uint8_t* stack_bottom;
+
+#define prf "[%d : p-allocexit] "
 
 void process_main(void) {
     // Process 1 never allocates; it alternates between forking children
@@ -36,6 +38,8 @@ void process_main(void) {
     // or (2) allocation fails (out of physical memory).
     while (1) {
         int x = rand(0, 8 * ALLOC_SLOWDOWN - 1);
+        // sys_log_printf(prf "rand(0, %d) = %d, heap_top: %p, stack_bottom: %p\n",
+        //                p, 8 * ALLOC_SLOWDOWN - 1, x, heap_top, stack_bottom);
         if (x < 8 * p && heap_top != stack_bottom) {
             if (sys_page_alloc(heap_top) >= 0) {
                 *heap_top = p;      // check we have write access to new page
@@ -47,6 +51,7 @@ void process_main(void) {
             }
         } else if (x == 8 * p + 1
                    || (x < p && heap_top == stack_bottom)) {
+            sys_log_printf(prf "exiting\n", p);
             sys_exit(0);
         } else {
             (void) sys_waitpid(0, nullptr, W_NOHANG);

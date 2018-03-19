@@ -108,22 +108,9 @@ void process_setup(pid_t pid, const char* name) {
 void process_exit(proc* p, int status = 0) {
     p->exit_status_ = status;
 
-    // free virtual memory
-    for (vmiter vmit(p); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
-        if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
-            kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
-            int r = vmiter(p->pagetable_, vmit.va()).map(0x0);
-            assert(r >= 0);
-        }
-    }
-
-    // free pagetables
-    for (ptiter ptit(p, 0); ptit.low(); ptit.next()) {
-        kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
-    }
-
+    // FIXME: THIS IS FUCKED
     // free file descriptor table
-    kdelete(p->fdtable_);
+    // kdelete(p->fdtable_);
 
     // interrupt parent
     auto irqs = ptable_lock.lock();
@@ -135,7 +122,7 @@ void process_exit(proc* p, int status = 0) {
         daddy->wake();
     }
 
-    // manage process hierarchy
+    // re-parent children
     while (!p->children_.empty()) {
         proc* child = p->children_.pop_front();
         child->ppid_ = 1;
@@ -155,15 +142,29 @@ int process_reap(pid_t pid) {
     auto irqs = ptable_lock.lock();
     proc* p = ptable[pid];
 
-    // manage process hierarchy
+    // free virtual memory
+    for (vmiter vmit(p); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
+        if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
+            kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
+            int r = vmiter(p->pagetable_, vmit.va()).map(0x0);
+            assert(r >= 0);
+        }
+    }
+
+    // free L3-L1 pagetables
+    for (ptiter ptit(p, 0); ptit.low(); ptit.next()) {
+        kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
+    }
+
+    // erase proc from parent's children
     ptable[p->ppid_]->children_.erase(p);
 
-    int status = p->exit_status_;
+    int exit_status = p->exit_status_;
     kfree(p->pagetable_);
     kfree(p);
     ptable[pid] = nullptr;
     ptable_lock.unlock(irqs);
-    return status;
+    return exit_status;
 }
 
 
@@ -187,6 +188,8 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
         return -1;
     }
 
+    debug_printf("[%d] forking into pid %d\n", ogproc->pid_, fpid);
+
     // allocate proc, store in ptable
     proc* fproc = ptable[fpid] = kalloc_proc();
     if (!fproc) {
@@ -194,40 +197,47 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
         return -1;
     }
 
-    // allocate fdtable
-    fproc->fdtable_ = knew<fdtable>();
-    if (!fproc->fdtable_) {
-        kdelete(fproc);
+    // allocate pagetable
+    x86_64_pagetable* fpt = fproc->pagetable_ = kalloc_pagetable();
+    if (!fpt) {
         ptable[fpid] = nullptr;
+        kdelete(fproc);
         ptable_lock.unlock(irqs);
         return -1;
     }
 
-    // misc initialization
-    fproc->pid_ = fpid;
+    // initialize proc data
+    fproc->init_user(fpid, fpt);    // note: sets registers wrong
     fproc->state_ = proc::broken;
+
+    // set up process hierarchy
     fproc->ppid_ = ogproc->pid_;
     fproc->children_.reset();
     ogproc->children_.push_back(fproc);
     ptable_lock.unlock(irqs);
 
+    // allocate fdtable
+    fproc->fdtable_ = knew<fdtable>();
+    if (!fproc->fdtable_) {
+        irqs = ptable_lock.lock();
+        kdelete(fpt);
+        kdelete(fproc);
+        ptable[fpid] = nullptr;
+        ptable_lock.unlock(irqs);
+        return -1;
+    }
+
     // clone ogproc's fdtable
     auto fdt_irqs = ogproc->fdtable_->lock_.lock();
-    fproc->fdtable_ = ogproc->fdtable_;
+    // only copy the fds, not refs or the lock
+    memcpy((void*) fproc->fdtable_->fds_, (void*) ogproc->fdtable_->fds_,
+           NFDS * sizeof(file*));
     for (unsigned i = 0; fproc->fdtable_->fds_[i] && i < NFDS; i++) {
         fproc->fdtable_->fds_[i]->refs_++;
     }
     ogproc->fdtable_->lock_.unlock(fdt_irqs);
 
-    x86_64_pagetable* fpt = fproc->pagetable_ = kalloc_pagetable();
-    if (!fpt) {
-        kdelete(fproc->fdtable_);
-        kdelete(fproc);
-        irqs = ptable_lock.lock();
-        ptable[fpid] = nullptr;
-        ptable_lock.unlock(irqs);
-        return -1;
-    }
+
 
     // 3. Copy the parent process’s user-accessible memory and map the copies
     // into the new process’s page table.
@@ -257,9 +267,6 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
         }
     }
 
-    // Initialize fproc structure (note: sets registers wrong)
-    fproc->init_user(fpid, fpt);
-
     // 4. Initialize the new process’s registers to a copy of the old process’s
     // registers.
     *fproc->regs_ = *ogregs;
@@ -271,6 +278,7 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
     cpus[cpu].runq_lock_.lock_noirq();
     debug_printf("[%d] process_fork enqueueing pid %d\n",
                  ogproc->pid_, fproc->pid_);
+    fproc->state_ = proc::runnable;
     cpus[cpu].enqueue(fproc);
     cpus[cpu].runq_lock_.unlock_noirq();
 
