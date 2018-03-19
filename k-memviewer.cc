@@ -95,6 +95,22 @@ void memusage::refresh() {
                 }
             }
             p->unlock_pagetable_read(irqs);
+
+            if (p->fdtable_) {
+                irqs = p->fdtable_->lock_.lock();
+                // mark fdtable
+                mark(ka2pa(p->fdtable_), f_kernel | f_process(pid));
+                for (unsigned i = 0; i < NFDS && p->fdtable_->fds_[i]; i++) {
+                    p->fdtable_->fds_[i]->lock_.lock_noirq();
+                    // mark file structs
+                    mark(ka2pa(&p->fdtable_->fds_[i]), f_kernel | f_process(pid));
+                    // mark vnode structs
+                    mark(ka2pa(p->fdtable_->fds_[i]->vnode_),
+                         f_kernel | f_process(pid));
+                    p->fdtable_->fds_[i]->lock_.unlock_noirq();
+                }
+                p->fdtable_->lock_.unlock(irqs);
+            }
         }
     }
 

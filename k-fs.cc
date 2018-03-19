@@ -15,7 +15,6 @@ int file::deref() {
 	}
 }
 
-
 file::~file() {
 	vnode_->refs_--;
 	assert(vnode_->refs_ >= 0);

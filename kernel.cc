@@ -117,10 +117,6 @@ void process_setup(pid_t pid, const char* name) {
 void process_exit(proc* p, int status = 0) {
     p->exit_status_ = status;
 
-    // FIXME: THIS IS FUCKED
-    // free file descriptor table
-    // kdelete(p->fdtable_);
-
     // interrupt parent
     auto irqs = ptable_lock.lock();
     debug_printf("[%d] process_exit interrupting parent %d\n",
@@ -150,6 +146,8 @@ void process_exit(proc* p, int status = 0) {
 int process_reap(pid_t pid) {
     auto irqs = ptable_lock.lock();
     proc* p = ptable[pid];
+
+    kdelete(p->fdtable_);
 
     // free virtual memory
     for (vmiter vmit(p); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
@@ -201,11 +199,12 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
 
     // allocate proc, store in ptable
     proc* fproc = ptable[fpid] = kalloc_proc();
-    ptable_lock.unlock(irqs);
     if (!fproc) {
+        ptable_lock.unlock(irqs);
         return -1;
     }
     fproc->state_ = proc::broken;
+    ptable_lock.unlock(irqs);
 
     // allocate pagetable
     x86_64_pagetable* fpt = fproc->pagetable_ = kalloc_pagetable();
@@ -219,34 +218,37 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
 
     // initialize proc data
     fproc->init_user(fpid, fpt);    // note: sets registers wrong
-    
+
+    // allocate fdtable
+    fproc->fdtable_ = knew<fdtable>();
+    if (!fproc->fdtable_) {
+        irqs = ptable_lock.lock();
+        kdelete(fpt);
+        kdelete(fproc);
+        ptable[fpid] = nullptr;
+        ptable_lock.unlock(irqs);
+        return -1;
+    }
+
+    // clone ogproc's fdtable
+    auto fdt_irqs = ogproc->fdtable_->lock_.lock();
+    // only copy the fds, not refs or the lock
+    memcpy((void*) fproc->fdtable_->fds_, (void*) ogproc->fdtable_->fds_,
+           NFDS * sizeof(file*));
+    for (unsigned i = 0; fproc->fdtable_->fds_[i] && i < NFDS; i++) {
+        auto f = fproc->fdtable_->fds_[i];
+        f->lock_.lock_noirq();
+        f->refs_++;
+        f->vnode_->lock_.lock_noirq();
+        f->lock_.unlock_noirq();
+        f->vnode_->refs_++;
+        f->vnode_->lock_.unlock_noirq();
+    }
+    ogproc->fdtable_->lock_.unlock(fdt_irqs);
 
     // set up process hierarchy
     fproc->ppid_ = ogproc->pid_;
     ogproc->children_.push_back(fproc);
-    
-
-    // // allocate fdtable
-    // fproc->fdtable_ = knew<fdtable>();
-    // if (!fproc->fdtable_) {
-    //     irqs = ptable_lock.lock();
-    //     kdelete(fpt);
-    //     kdelete(fproc);
-    //     ptable[fpid] = nullptr;
-    //     ptable_lock.unlock(irqs);
-    //     return -1;
-    // }
-
-    // // clone ogproc's fdtable
-    // auto fdt_irqs = ogproc->fdtable_->lock_.lock();
-    // // only copy the fds, not refs or the lock
-    // memcpy((void*) fproc->fdtable_->fds_, (void*) ogproc->fdtable_->fds_,
-    //        NFDS * sizeof(file*));
-    // for (unsigned i = 0; fproc->fdtable_->fds_[i] && i < NFDS; i++) {
-    //     fproc->fdtable_->fds_[i]->refs_++;
-    // }
-    // ogproc->fdtable_->lock_.unlock(fdt_irqs);
-
 
 
     // 3. Copy the parent process’s user-accessible memory and map the copies

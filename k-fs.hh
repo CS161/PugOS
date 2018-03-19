@@ -69,4 +69,90 @@ struct vn_keyboard_console : vnode {
 };
 
 
+// // pipes
+
+// struct bbuffer {
+//    char buf_[BBUFFER_SIZE];
+//    size_t pos_;
+//    size_t len_;
+//    int write_closed_;
+//    spinlock lock_;
+
+//    ssize_t read(char* buf, size_t sz);
+//    ssize_t write()
+
+//    bbuffer() : buf_{0}, pos_(0), len_(0), write_closed_(0) { };
+// };
+
+
+// ssize_t read(bbuffer* bb, char* buf, size_t sz) {
+//     size_t pos = 0;
+//     pthread_mutex_lock(&bb->mutex);
+//     while (pos < sz) {
+//         size_t ncopy = sz - pos;
+//         if (ncopy > sizeof(bb->buf) - bb->pos) {
+//             ncopy = sizeof(bb->buf) - bb->pos;
+//         }
+//         if (ncopy > bb->len) {
+//             ncopy = bb->len;
+//         }
+//         memcpy(&buf[pos], &bb->buf[bb->pos], ncopy);
+//         bb->pos = (bb->pos + ncopy) % sizeof(bb->buf);
+//         bb->len -= ncopy;
+//         pos += ncopy;
+//         if (ncopy == 0) {
+//             if (bb->write_closed || pos > 0) {
+//                 break;
+//             }
+//             pthread_cond_wait(&bb->nonempty, &bb->mutex);
+//         }
+//     }
+//     int write_closed = bb->write_closed;
+//     pthread_mutex_unlock(&bb->mutex);
+//     if (pos == 0 && sz > 0 && !write_closed) {
+//         return -1;  // cannot happen
+//     } else {
+//         if (pos > 0) {
+//             pthread_cond_broadcast(&bb->nonfull);
+//         }
+//         return pos;
+//     }
+// }
+
+
+// ssize_t bbuffer_write(bbuffer* bb, const char* buf, size_t sz) {
+//     size_t pos = 0;
+//     pthread_mutex_lock(&bb->mutex);
+//     assert(!bb->write_closed);
+//     while (pos < sz) {
+//         size_t bb_index = (bb->pos + bb->len) % sizeof(bb->buf);
+//         size_t ncopy = sz - pos;
+//         if (ncopy > sizeof(bb->buf) - bb_index) {
+//             ncopy = sizeof(bb->buf) - bb_index;
+//         }
+//         if (ncopy > sizeof(bb->buf) - bb->len) {
+//             ncopy = sizeof(bb->buf) - bb->len;
+//         }
+//         memcpy(&bb->buf[bb_index], &buf[pos], ncopy);
+//         bb->len += ncopy;
+//         pos += ncopy;
+//         if (ncopy == 0) {
+//             if (pos > 0) {
+//                 break;
+//             }
+//             pthread_cond_wait(&bb->nonfull, &bb->mutex);
+//         }
+//     }
+//     pthread_mutex_unlock(&bb->mutex);
+//     if (pos == 0 && sz > 0) {
+//         return -1;  // cannot happen
+//     } else {
+//         if (pos > 0) {
+//             pthread_cond_broadcast(&bb->nonempty);
+//         }
+//         return pos;
+//     }
+// }
+
+
 #endif
