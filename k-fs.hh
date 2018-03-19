@@ -5,8 +5,31 @@
 #define NFDS 256
 
 
+// for pipes
+
+#define BBUFFER_SIZE 128
+
+struct bbuffer {
+   char buf_[BBUFFER_SIZE];
+   size_t pos_;
+   size_t len_;
+   bool read_closed_;
+   bool write_closed_;
+   spinlock lock_;
+
+   wait_queue nonfull_wq_;
+   wait_queue nonempty_wq_;
+
+   bbuffer() : buf_{0}, pos_(0), len_(0), read_closed_(false),
+   			   write_closed_(false) { };
+};
+
+
 struct vnode {
 	const char* filename_;
+
+	// bounded buffer for pipes
+	bbuffer* bb_;
 	
 	// lock_ guards everything below it
 	spinlock lock_;
@@ -23,13 +46,14 @@ struct vnode {
 	virtual int rmdir() { return E_PERM; };
 	virtual int rename() { return E_PERM; };
 
-	vnode() : refs_(1), sz_(0) { };
+	vnode() : bb_(nullptr), refs_(1), sz_(0) { };
+	~vnode();
 };
 
 
 struct file {
 	enum type_t {
-		normie, stream, directory
+		normie, pipe, directory
 	};
 
 	type_t type_;
@@ -40,7 +64,7 @@ struct file {
 	// lock_ guards everything below it
 	spinlock lock_;
 	int refs_; // for threading later
-	int deref();
+	void deref();
 	size_t off_;
 
 	file() : refs_(1), off_(0) { };
@@ -64,32 +88,17 @@ struct fdtable {
 
 struct vn_keyboard_console : vnode {
 	const char* filename_ = "keyboard/console";
-    virtual size_t read(uintptr_t buf, size_t sz);
-    virtual size_t write(uintptr_t buf, size_t sz);
+    virtual size_t read(uintptr_t buf, size_t sz) override;
+    virtual size_t write(uintptr_t buf, size_t sz) override;
 };
 
 
 // pipes
 
-#define BBUFFER_SIZE 128
-
-struct bbuffer {
-   char buf_[BBUFFER_SIZE];
-   size_t pos_;
-   size_t len_;
-   int write_closed_;
-   spinlock lock_;
-
-   bbuffer() : buf_{0}, pos_(0), len_(0), write_closed_(0) { };
-};
-
 struct vn_pipe : vnode {
 	const char* filename_ = "pipe";
-	virtual size_t read(uintptr_t buf, size_t sz);
-    virtual size_t write(uintptr_t buf, size_t sz);
-
-  private:
-  	bbuffer bb_;
+	virtual size_t read(uintptr_t buf, size_t sz) override;
+    virtual size_t write(uintptr_t buf, size_t sz) override;
 };
 
 

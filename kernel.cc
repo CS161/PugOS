@@ -78,7 +78,7 @@ void process_setup(pid_t pid, const char* name) {
     file* f = p->fdtable_->fds_[0] = p->fdtable_->fds_[1] =
               p->fdtable_->fds_[2] = knew<file>();
     assert(f);
-    f->type_ = file::stream;
+    f->type_ = file::pipe;
     f->readable_ = true;
     f->writeable_ = true;
     f->vnode_ = knew<vn_keyboard_console>();
@@ -604,7 +604,7 @@ uintptr_t proc::syscall(regstate* regs) {
         debug_printf("; mode r? %s; w? %s\n",
             f->readable_ ? "yes" : "no", f->writeable_ ? "yes" : "no");
         if ((regs->reg_rax == SYSCALL_READ && !f->readable_)
-            || (regs->reg_rax == SYSCALL_WRITE && !f->writeable_)) {
+              || (regs->reg_rax == SYSCALL_WRITE && !f->writeable_)) {
             fdtable_->lock_.unlock(irqs);
             r = E_BADF;
             debug_printf("returning E_PERM\n");
@@ -623,8 +623,8 @@ uintptr_t proc::syscall(regstate* regs) {
             mem_flags |= PTE_W;
         }
         if (addr + sz > VA_LOWEND
-            || addr > VA_HIGHMAX - sz
-            || !vmiter(this, addr).check_range(sz, mem_flags)) {
+              || addr > VA_HIGHMAX - sz
+              || !vmiter(this, addr).check_range(sz, mem_flags)) {
             fdtable_->lock_.unlock(irqs);
             r = E_FAULT;
             debug_printf("returning E_FAULT\n");
@@ -632,6 +632,7 @@ uintptr_t proc::syscall(regstate* regs) {
         }
 
         f->lock_.lock_noirq();
+        assert(f->refs_ > 0);
         fdtable_->lock_.unlock_noirq();
         f->refs_++;
         f->lock_.unlock(irqs);
@@ -643,9 +644,7 @@ uintptr_t proc::syscall(regstate* regs) {
             r = f->vnode_->write(addr, sz);
         }
 
-        irqs = f->lock_.lock();
         f->deref();
-        f->lock_.unlock(irqs);
 
         debug_printf("[%d] sys_%s %d bytes\n", pid_,
             regs->reg_rax == SYSCALL_READ ? "read read" : "write wrote", r);
@@ -667,7 +666,8 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
-        fdtable_->fds_[newfd] && fdtable_->fds_[newfd]->deref();
+        if (fdtable_->fds_[newfd])
+            fdtable_->fds_[newfd]->deref();
         fdtable_->fds_[newfd] = fdtable_->fds_[oldfd];
         fdtable_->fds_[oldfd]->refs_++;
         fdtable_->lock_.unlock(irqs);
@@ -697,46 +697,52 @@ uintptr_t proc::syscall(regstate* regs) {
     }
 
     case SYSCALL_PIPE: {
-        int fd1 = -1;
-        int fd2 = -1;
+        uintptr_t rfd = -1;
+        uintptr_t wfd = -1;
 
         auto irqs = fdtable_->lock_.lock();
-        for(int i = 0; i < NFDS; i++) {
-            if (!fdtable_->fds_[i] && !fd1) {
-                fd1 = i;
+        for(unsigned i = 0; i < NFDS; i++) {
+            if (!fdtable_->fds_[i] && rfd == (uintptr_t) -1) {
+                rfd = i;
             }
-            else if (!fdtable_->fds_[i] && !fd2) {
-                fd2 = i;
+            else if (!fdtable_->fds_[i] && wfd == (uintptr_t) -1) {
+                wfd = i;
                 break;
             }
         }
 
         // not enough open fds
-        if (fd1 < 0 || fd2 < 0) {
+        if (rfd == (uintptr_t) -1 || wfd == (uintptr_t) -1) {
             fdtable_->lock_.unlock(irqs);
             r = -1; // FIXME: RETURN CORRECT ERROR CODE
             break;
         }
 
-        auto file1 = fdtable_->fds_[fd1] = knew<file>();
-        auto file2 = fdtable_->fds_[fd2] = knew<file>();
+        auto rfile = fdtable_->fds_[rfd] = knew<file>();
+        auto wfile = fdtable_->fds_[wfd] = knew<file>();
         auto pipe_vnode = knew<vn_pipe>();
-        if (!file1 || !file2 || !pipe_vnode) {
-            fdtable_->fds_[fd1] = fdtable_->fds_[fd2] = nullptr;
-            kdelete(file1);
-            kdelete(file2);
+        auto bb = knew<bbuffer>();
+        if (!rfile || !wfile || !pipe_vnode || !bb) {
+            fdtable_->fds_[rfd] = fdtable_->fds_[wfd] = nullptr;
+            kdelete(rfile);
+            kdelete(wfile);
             kdelete(pipe_vnode);
+            kdelete(bb);
             fdtable_->lock_.unlock(irqs);
             r = -1; // FIXME: RETURN CORRECT ERROR CODE
             break;
         }
 
-        file1->vnode_ = file2 ->vnode_ = pipe_vnode;
+        rfile->type_ = wfile->type_ = file::pipe;
+        rfile->readable_ = wfile->writeable_ = true;
+        rfile->writeable_ = wfile->readable_ = false;
+        pipe_vnode->bb_ = bb;
+        rfile->vnode_ = wfile ->vnode_ = pipe_vnode;
         pipe_vnode->refs_ = 2;
 
         fdtable_->lock_.unlock(irqs);
 
-        r = fd1 | (fd2 << 32);
+        r = rfd | (wfd << 32);
         break;
     }
 

@@ -1,5 +1,7 @@
 #include "p-lib.hh"
 
+#define prf "[testpipe] "
+
 void process_main() {
     sys_kdisplay(KDISPLAY_NONE);
 
@@ -7,6 +9,8 @@ void process_main() {
 
     int pfd[2] = {-1, -1};
     int x = sys_pipe(pfd);
+    sys_log_printf(prf "x = %d, pipe[0] = %d, pipe[1] = %d\n",
+        x, pfd[0], pfd[1]);
     assert(x == 0 && pfd[0] > 2 && pfd[1] > 2 && pfd[0] != pfd[1]);
 
     int qfd[2] = {-1, -1};
@@ -89,64 +93,85 @@ void process_main() {
     assert(p >= 0);
 
     if (p == 0) {
+        sys_log_printf(prf "child parent test 1\n");
         x = sys_close(pfd[1]);
         assert(x == 0);
 
+        sys_log_printf(prf "child parent test 2\n");
         x = sys_close(qfd[0]);
         assert(x == 0);
 
+        sys_log_printf(prf "child parent test 3\n");
         x = sys_close(pfd[1]);
         assert(x == E_BADF);
 
+        sys_log_printf(prf "child parent test 4\n");
         n = sys_write(qfd[1], "hello mom", 9);
         assert(n == 9);
 
+        sys_log_printf(prf "child parent test 5\n");
         n = sys_read(pfd[0], buf, 100);
         assert(n == 5 && memcmp(buf, "hello", 5) == 0);
 
+        sys_log_printf(prf "child parent test 6\n");
         n = sys_read(pfd[0], buf, 100);
         assert(n == 5 && memcmp(buf, " babe", 5) == 0);
 
+        sys_log_printf(prf "child parent test 7\n");
         x = sys_msleep(300);
         assert(x == 0);
 
+        sys_log_printf(prf "child parent test 8\n");
         x = sys_close(pfd[0]);
         assert(x == 0);
 
+        sys_log_printf(prf "child parent test 9\n");
         x = sys_close(qfd[1]);
         assert(x == 0);
 
+        sys_log_printf(prf "child parent tests DONE\n");
         sys_exit(0);
     }
 
+    sys_log_printf(prf "child test 1\n");
     x = sys_close(pfd[0]);
     assert(x == 0);
 
+    sys_log_printf(prf "child test 2\n");
     x = sys_close(qfd[1]);
     assert(x == 0);
 
+    sys_log_printf(prf "child test 3\n");
     n = sys_read(qfd[0], buf, 100);
     assert(n == 9 && memcmp(buf, "hello mom", 9) == 0);
 
+    sys_log_printf(prf "child test 4\n");
     n = sys_write(pfd[1], "hello", 5);
     assert(n == 5);
 
     sys_msleep(300);
 
+    sys_log_printf(prf "child test 5\n");
     n = sys_write(pfd[1], " babe", 5);
     assert(n == 5);
 
+    sys_log_printf(prf "child test 6\n");
     n = sys_read(qfd[0], buf, 100);
     assert(n == 0);
 
+    sys_log_printf(prf "child test 7\n");
     n = sys_write(pfd[1], "wharg", 5);
     assert(n == E_PIPE);
 
+    sys_log_printf(prf "child test 8\n");
     x = sys_close(qfd[0]);
     assert(x == 0);
 
+    sys_log_printf(prf "child test 9\n");
     x = sys_close(pfd[1]);
     assert(x == 0);
+
+    sys_log_printf(prf "child tests DONE\n");
 
 
     // inheritance tests with close-on-exit

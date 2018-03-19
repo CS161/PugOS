@@ -2,26 +2,48 @@
 #include "k-devices.hh"
 
 
+
+vnode::~vnode() {
+	kdelete(bb_);
+}
+
+
 // file
 
 // returns 1 if it freed itself, 0 if it still exists
-int file::deref() {
-	refs_--;
+// DO NOT CALL WITH FILE LOCK HELD
+void file::deref() {
+	auto irqs = lock_.lock();
+	--refs_;
 	assert(refs_ >= 0);
-	if (refs_ == 0) {
-		kdelete<file>(this);
-		return 1;
-	}
-	else {
-		return 0;
-	}
+	auto refs = refs_;
+	lock_.unlock(irqs);
+	if (refs == 0)
+		kdelete(this);
 }
 
 file::~file() {
-	vnode_->refs_--;
+	auto irqs = vnode_->lock_.lock();
+	--vnode_->refs_;
 	assert(vnode_->refs_ >= 0);
-	if (vnode_->refs_ == 0) {
-		kdelete<vnode>(vnode_);
+
+	if (type_ == file::pipe && vnode_->bb_) {
+		auto irqs = vnode_->bb_->lock_.lock();
+		if (type_ == file::pipe && readable_) {
+			vnode_->bb_->read_closed_ = true;
+			vnode_->bb_->nonfull_wq_.wake_all();
+		}
+		if (type_ == file::pipe && writeable_) {
+			vnode_->bb_->write_closed_ = true;
+			vnode_->bb_->nonempty_wq_.wake_all();
+		}
+		vnode_->bb_->lock_.unlock(irqs);
+	}
+
+	auto refs = vnode_->refs_;
+	vnode_->lock_.unlock(irqs);
+	if (refs == 0) {
+		kdelete(vnode_);
 	}
 }
 
@@ -29,8 +51,10 @@ file::~file() {
 // fdtable
 
 fdtable::~fdtable() {
-    for (unsigned i = 0; fds_[i] && i < NFDS; i++) {
-        fds_[i]->deref();
+    for (unsigned i = 0; i < NFDS; i++) {
+    	if (fds_[i]) {
+        	fds_[i]->deref();
+    	}
     }
 }
 
@@ -96,74 +120,86 @@ size_t vn_keyboard_console::write(uintptr_t buf, size_t sz) {
 // vn_pipe
 
 size_t vn_pipe::read(uintptr_t buf, size_t sz) {
-    size_t pos = 0;
+    size_t input_pos = 0;
     char* input_buf = reinterpret_cast<char*>(buf);
 
-    auto irqs = bb_.lock_.lock();
-    while (pos < sz) {
-        size_t ncopy = sz - pos;
-        if (ncopy > sizeof(bb_.buf_) - bb_.pos_) {
-            ncopy = sizeof(bb_.buf_) - bb_.pos_;
-        }
-        if (ncopy > bb_.len_) {
-            ncopy = bb_.len_;
-        }
-        memcpy(&input_buf[pos], &bb_.buf_[bb_.pos_], ncopy);
-        bb_.pos_ = (bb_.pos_ + ncopy) % sizeof(bb_.buf_);
-        bb_.len_ -= ncopy;
-        pos += ncopy;
-        if (ncopy == 0) {
-            if (bb_.write_closed_ || pos > 0) {
-                break;
-            }
-            // pthread_cond_wait(&bb_.nonempty, &bb_.mutex);
-        }
+    auto irqs = bb_->lock_.lock();
+    assert(!bb_->read_closed_);
+
+    if (bb_->len_ == 0) {
+	    // block until data is available
+	    waiter(current()).block_until(bb_->nonempty_wq_, [&] () {
+	            return sz == 0 || bb_->len_ > 0 || bb_->write_closed_;
+	        }, bb_->lock_, irqs);
+	}
+
+    if (bb_->write_closed_) {
+    	bb_->lock_.unlock(irqs);
+    	return 0;
     }
-    int write_closed = bb_.write_closed_;
-    bb_.lock_.unlock(irqs);
-    if (pos == 0 && sz > 0 && !write_closed) {
-        return -1;  // cannot happen
-    } else {
-        if (pos > 0) {
-            // pthread_cond_broadcast(&bb_.nonfull);
+
+    while (input_pos < sz && bb_->len_ > 0) {
+        size_t ncopy = sz - input_pos;
+        if (ncopy > BBUFFER_SIZE - bb_->pos_) {
+            ncopy = BBUFFER_SIZE - bb_->pos_;
         }
-        return pos;
+        if (ncopy > bb_->len_) {
+            ncopy = bb_->len_;
+        }
+        memcpy(&input_buf[input_pos], &bb_->buf_[bb_->pos_], ncopy);
+        bb_->pos_ = (bb_->pos_ + ncopy) % BBUFFER_SIZE;
+        bb_->len_ -= ncopy;
+        input_pos += ncopy;
+    }
+    bb_->lock_.unlock(irqs);
+
+    if (input_pos == 0 && sz > 0) {
+    	return -1;
+    } else {
+    	bb_->nonfull_wq_.wake_all();
+    	return input_pos;
     }
 }
 
 
 size_t vn_pipe::write(uintptr_t buf, size_t sz) {
-    size_t pos = 0;
+    size_t input_pos = 0;
     const char* input_buf = reinterpret_cast<const char*>(buf);
 
-    auto irqs = bb_.lock_.lock();
-    assert(!bb_.write_closed_);
-    while (pos < sz) {
-        size_t bb_index = (bb_.pos_ + bb_.len_) % sizeof(bb_.buf_);
-        size_t ncopy = sz - pos;
-        if (ncopy > sizeof(bb_.buf_) - bb_index) {
-            ncopy = sizeof(bb_.buf_) - bb_index;
-        }
-        if (ncopy > sizeof(bb_.buf_) - bb_.len_) {
-            ncopy = sizeof(bb_.buf_) - bb_.len_;
-        }
-        memcpy(&bb_.buf_[bb_index], &input_buf[pos], ncopy);
-        bb_.len_ += ncopy;
-        pos += ncopy;
-        if (ncopy == 0) {
-            if (pos > 0) {
-                break;
-            }
-            // pthread_cond_wait(&bb_.nonfull, &bb_.mutex);
-        }
+    auto irqs = bb_->lock_.lock();
+    assert(!bb_->write_closed_);
+
+    if (bb_->len_ == BBUFFER_SIZE) {
+	    // block until data is available
+	    waiter(current()).block_until(bb_->nonfull_wq_, [&] () {
+	            return sz == 0 || bb_->len_ < BBUFFER_SIZE || bb_->read_closed_;
+	        }, bb_->lock_, irqs);
+	}
+
+    if (bb_->read_closed_) {
+    	bb_->lock_.unlock(irqs);
+    	return E_PIPE;
     }
-    bb_.lock_.unlock(irqs);
-    if (pos == 0 && sz > 0) {
-        return -1;  // cannot happen
-    } else {
-        if (pos > 0) {
-            // pthread_cond_broadcast(&bb_.nonempty);
+
+    while (input_pos < sz && bb_->len_ < BBUFFER_SIZE) {
+        size_t bb_index = (bb_->pos_ + bb_->len_) % BBUFFER_SIZE;
+        size_t ncopy = sz - input_pos;
+        if (ncopy > BBUFFER_SIZE - bb_index) {
+            ncopy = BBUFFER_SIZE - bb_index;
         }
-        return pos;
+        if (ncopy > BBUFFER_SIZE - bb_->len_) {
+            ncopy = BBUFFER_SIZE - bb_->len_;
+        }
+        memcpy(&bb_->buf_[bb_index], &input_buf[input_pos], ncopy);
+        bb_->len_ += ncopy;
+        input_pos += ncopy;
+    }
+    bb_->lock_.unlock(irqs);
+
+    if (input_pos == 0 && sz > 0) {
+        return -1;
+    } else {
+    	bb_->nonempty_wq_.wake_all();
+        return input_pos;
     }
 }
