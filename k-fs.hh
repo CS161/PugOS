@@ -79,7 +79,6 @@ struct fdtable {
 	file* fds_[NFDS]; // LENGTH: global constant
 
 	fdtable() : refs_(1), fds_{nullptr} { };
-	~fdtable();
 };
 
 

@@ -48,17 +48,6 @@ file::~file() {
 }
 
 
-// fdtable
-
-fdtable::~fdtable() {
-    for (unsigned i = 0; i < NFDS; i++) {
-    	if (fds_[i]) {
-        	fds_[i]->deref();
-    	}
-    }
-}
-
-
 
 // vn_keyboard_console
 

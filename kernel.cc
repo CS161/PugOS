@@ -117,6 +117,13 @@ void process_setup(pid_t pid, const char* name) {
 void process_exit(proc* p, int status = 0) {
     p->exit_status_ = status;
 
+    // free file descriptors
+    for (unsigned i = 0; i < NFDS; i++) {
+        if (p->fdtable_->fds_[i]) {
+            p->fdtable_->fds_[i]->deref();
+        }
+    }
+
     // interrupt parent
     auto irqs = ptable_lock.lock();
     debug_printf("[%d] process_exit interrupting parent %d\n",
