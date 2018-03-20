@@ -797,10 +797,6 @@ uintptr_t proc::syscall(regstate* regs) {
         }
         memfile::lock_.unlock(irqs);
 
-        if (flags & OF_TRUNC) {
-            m->len_ = 0;
-        }
-
         int fd = -1;
         irqs = fdtable_->lock_.lock();
         for (int i = 0; i < NFDS; i++) {
@@ -809,25 +805,34 @@ uintptr_t proc::syscall(regstate* regs) {
                 break;
             }
         }
-        // couldn't find an open file descriptor
-        if (fd == -1) {
-            r = E_MFILE;
-            fdtable_->lock_.unlock(irqs);
-            m = nullptr;
-            break;
-        }
 
         file* f = knew<file>();
         vnode* v = knew<vnode_memfile>(m);
-        if (!f || !v) {
+        if (!f || !v || fd == -1) {
+            fdtable_->lock_.unlock(irqs);
             kdelete(f);
             kdelete(v);
-            m = nullptr;
-            fdtable_->lock_.unlock(irqs);
+            if (created) {
+                irqs = memfile::lock_.lock();
+                kfree(m->data_);
+                *m = memfile();
+                memfile::lock_.unlock(irqs);
+            }
+            if (fd == -1)
+                r = E_MFILE;
+            else
+                r = E_NOMEM;
             break;
         }
         fdtable_->fds_[fd] = f;
         fdtable_->lock_.unlock(irqs);
+
+        if (flags & OF_TRUNC) {
+            irqs = memfile::lock_.lock();
+            m->len_ = 0;
+            memfile::lock_.unlock(irqs);
+        }
+
         f->readable_ = flags & OF_READ;
         f->writeable_ = flags & OF_WRITE;
         f->type_ = file::normie;
