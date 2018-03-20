@@ -91,7 +91,7 @@ struct fdtable {
 
 // fd 0-2 Keyboard/Console
 
-struct vn_keyboard_console : vnode {
+struct vnode_kbc : vnode {
     const char* filename_ = "keyboard/console";
     virtual size_t read(uintptr_t buf, size_t sz, size_t& offset) override;
     virtual size_t write(uintptr_t buf, size_t sz, size_t& offset) override;
@@ -100,7 +100,7 @@ struct vn_keyboard_console : vnode {
 
 // pipes
 
-struct vn_pipe : vnode {
+struct vnode_pipe : vnode {
     const char* filename_ = "pipe";
     virtual size_t read(uintptr_t buf, size_t sz, size_t& offset) override;
     virtual size_t write(uintptr_t buf, size_t sz, size_t& offset) override;
@@ -109,11 +109,11 @@ struct vn_pipe : vnode {
 
 // memfs files
 
-struct vn_memfile : vnode {
+struct vnode_memfile : vnode {
     virtual size_t read(uintptr_t buf, size_t sz, size_t& offset) override;
     virtual size_t write(uintptr_t buf, size_t sz, size_t& offset) override;
 
-    vn_memfile(memfile* m) : m_(m) { filename_ = m->name_; };
+    vnode_memfile(memfile* m) : m_(m) { filename_ = m->name_; };
 
   private:
     memfile* m_;

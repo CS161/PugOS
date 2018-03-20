@@ -82,7 +82,7 @@ void process_setup(pid_t pid, const char* name) {
     f->type_ = file::pipe;
     f->readable_ = true;
     f->writeable_ = true;
-    f->vnode_ = knew<vn_keyboard_console>();
+    f->vnode_ = knew<vnode_kbc>();
     assert(f->vnode_);
     f->refs_ = 3;
 
@@ -818,7 +818,7 @@ uintptr_t proc::syscall(regstate* regs) {
         }
 
         file* f = knew<file>();
-        vnode* v = knew<vn_memfile>(m);
+        vnode* v = knew<vnode_memfile>(m);
         if (!f || !v) {
             kdelete(f);
             kdelete(v);
@@ -862,7 +862,7 @@ uintptr_t proc::syscall(regstate* regs) {
 
         auto rfile = fdtable_->fds_[rfd] = knew<file>();
         auto wfile = fdtable_->fds_[wfd] = knew<file>();
-        auto pipe_vnode = knew<vn_pipe>();
+        auto pipe_vnode = knew<vnode_pipe>();
         auto bb = knew<bbuffer>();
         if (!rfile || !wfile || !pipe_vnode || !bb) {
             fdtable_->fds_[rfd] = fdtable_->fds_[wfd] = nullptr;

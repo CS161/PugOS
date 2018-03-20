@@ -50,9 +50,9 @@ file::~file() {
 
 
 
-// vn_keyboard_console
+// vnode_kbc
 
-size_t vn_keyboard_console::read(uintptr_t buf, size_t sz, size_t& offset) {
+size_t vnode_kbc::read(uintptr_t buf, size_t sz, size_t& offset) {
 	(void) offset;
 	auto& kbd = keyboardstate::get();
     auto irqs = kbd.lock_.lock();
@@ -90,7 +90,7 @@ size_t vn_keyboard_console::read(uintptr_t buf, size_t sz, size_t& offset) {
 }
 
 
-size_t vn_keyboard_console::write(uintptr_t buf, size_t sz, size_t& offset) {
+size_t vnode_kbc::write(uintptr_t buf, size_t sz, size_t& offset) {
 	(void) offset;
     auto& csl = consolestate::get();
     auto irqs = csl.lock_.lock();
@@ -109,9 +109,9 @@ size_t vn_keyboard_console::write(uintptr_t buf, size_t sz, size_t& offset) {
 
 
 
-// vn_pipe
+// vnode_pipe
 
-size_t vn_pipe::read(uintptr_t buf, size_t sz, size_t& offset) {
+size_t vnode_pipe::read(uintptr_t buf, size_t sz, size_t& offset) {
 	(void) offset;
     size_t input_pos = 0;
     char* input_buf = reinterpret_cast<char*>(buf);
@@ -155,7 +155,7 @@ size_t vn_pipe::read(uintptr_t buf, size_t sz, size_t& offset) {
 }
 
 
-size_t vn_pipe::write(uintptr_t buf, size_t sz, size_t& offset) {
+size_t vnode_pipe::write(uintptr_t buf, size_t sz, size_t& offset) {
 	(void) offset;
     size_t input_pos = 0;
     const char* input_buf = reinterpret_cast<const char*>(buf);
@@ -200,9 +200,9 @@ size_t vn_pipe::write(uintptr_t buf, size_t sz, size_t& offset) {
 
 
 
-// vn_memfile
+// vnode_memfile
 
-size_t vn_memfile::read(uintptr_t buf, size_t sz, size_t& offset) {
+size_t vnode_memfile::read(uintptr_t buf, size_t sz, size_t& offset) {
     auto irqs = memfile::lock_.lock();
 
     // fuck blocking
@@ -221,7 +221,7 @@ size_t vn_memfile::read(uintptr_t buf, size_t sz, size_t& offset) {
 }
 
 
-size_t vn_memfile::write(uintptr_t buf, size_t sz, size_t& offset) {
+size_t vnode_memfile::write(uintptr_t buf, size_t sz, size_t& offset) {
     auto irqs = memfile::lock_.lock();
 
     size_t n = 0;
