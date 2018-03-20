@@ -52,8 +52,8 @@ file::~file() {
 
 // vnode_kbc
 
-size_t vnode_kbc::read(uintptr_t buf, size_t sz, size_t& offset) {
-	(void) offset;
+size_t vnode_kbc::read(uintptr_t buf, size_t sz, size_t& off) {
+	(void) off;
 	auto& kbd = keyboardstate::get();
     auto irqs = kbd.lock_.lock();
 
@@ -90,8 +90,8 @@ size_t vnode_kbc::read(uintptr_t buf, size_t sz, size_t& offset) {
 }
 
 
-size_t vnode_kbc::write(uintptr_t buf, size_t sz, size_t& offset) {
-	(void) offset;
+size_t vnode_kbc::write(uintptr_t buf, size_t sz, size_t& off) {
+	(void) off;
     auto& csl = consolestate::get();
     auto irqs = csl.lock_.lock();
 
@@ -111,8 +111,8 @@ size_t vnode_kbc::write(uintptr_t buf, size_t sz, size_t& offset) {
 
 // vnode_pipe
 
-size_t vnode_pipe::read(uintptr_t buf, size_t sz, size_t& offset) {
-	(void) offset;
+size_t vnode_pipe::read(uintptr_t buf, size_t sz, size_t& off) {
+	(void) off;
     size_t input_pos = 0;
     char* input_buf = reinterpret_cast<char*>(buf);
 
@@ -155,8 +155,8 @@ size_t vnode_pipe::read(uintptr_t buf, size_t sz, size_t& offset) {
 }
 
 
-size_t vnode_pipe::write(uintptr_t buf, size_t sz, size_t& offset) {
-	(void) offset;
+size_t vnode_pipe::write(uintptr_t buf, size_t sz, size_t& off) {
+	(void) off;
     size_t input_pos = 0;
     const char* input_buf = reinterpret_cast<const char*>(buf);
 
@@ -202,26 +202,26 @@ size_t vnode_pipe::write(uintptr_t buf, size_t sz, size_t& offset) {
 
 // vnode_memfile
 
-size_t vnode_memfile::read(uintptr_t buf, size_t sz, size_t& offset) {
+size_t vnode_memfile::read(uintptr_t buf, size_t sz, size_t& off) {
     auto irqs = memfile::lock_.lock();
 
     // fuck blocking
 
     // read that line or lines
     size_t n = 0;
-    while (n + offset < m_->len_ && n < sz) {
-        *reinterpret_cast<char*>(buf) = m_->data_[n + offset];
+    while (n + off < m_->len_ && n < sz) {
+        *reinterpret_cast<char*>(buf) = m_->data_[n + off];
         ++buf;
         ++n;
     }
 
-    offset += n;
+    off += n;
     memfile::lock_.unlock(irqs);
     return n;
 }
 
 
-size_t vnode_memfile::write(uintptr_t buf, size_t sz, size_t& offset) {
+size_t vnode_memfile::write(uintptr_t buf, size_t sz, size_t& off) {
     auto irqs = memfile::lock_.lock();
 
     size_t n = 0;
@@ -243,7 +243,7 @@ size_t vnode_memfile::write(uintptr_t buf, size_t sz, size_t& offset) {
         }
     }
 
-    offset += n;
+    off += n;
     memfile::lock_.unlock(irqs);
     return n;
 }

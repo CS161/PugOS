@@ -348,17 +348,17 @@ bool validate_memory(T* addr, size_t sz = 0, int perms = 0) {
 
 
 // check_string_termination(str, max_len)
-//    Checks if a string terminates within max_len characters. Returns -1 if not
+//    Checks if a string terminates within max_len characters. Returns <0 if not
 //    or the length of the string if it does.
 
 int check_string_termination(const char* str, int max_len) {
     for (int i = 0; i < max_len; i++) {
         if (!validate_memory(&str[i], 1, PTE_P | PTE_U))
-            return -1;
+            return E_FAULT;
         else if (str[i] == '\0')
             return i;
     }
-    return -1;
+    return E_INVAL;
 }
 
 
@@ -752,7 +752,7 @@ uintptr_t proc::syscall(regstate* regs) {
         }
         auto path_sz = check_string_termination(path, memfile::namesize);
         if (path_sz < 0) {
-            r = E_INVAL;
+            r = path_sz;
             break;
         } else if (!validate_memory(path, path_sz, PTE_P | PTE_U)) {
             r = E_FAULT;

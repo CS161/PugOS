@@ -38,8 +38,12 @@ struct vnode {
     int refs_;
     size_t sz_;
 
-    virtual size_t read(uintptr_t buf, size_t sz, size_t& offset) { return E_PERM; };
-    virtual size_t write(uintptr_t buf, size_t sz, size_t& offset) { return E_PERM; };
+    virtual size_t read(uintptr_t buf, size_t sz, size_t& off) {
+        return E_PERM;
+    };
+    virtual size_t write(uintptr_t buf, size_t sz, size_t& off) {
+        return E_PERM;
+    };
     // virtual int link() { return E_PERM; };
     // virtual int unlink() { return E_PERM; };
     // virtual int symlink() { return E_PERM; };
@@ -93,8 +97,8 @@ struct fdtable {
 
 struct vnode_kbc : vnode {
     const char* filename_ = "keyboard/console";
-    virtual size_t read(uintptr_t buf, size_t sz, size_t& offset) override;
-    virtual size_t write(uintptr_t buf, size_t sz, size_t& offset) override;
+    virtual size_t read(uintptr_t buf, size_t sz, size_t& off) override;
+    virtual size_t write(uintptr_t buf, size_t sz, size_t& off) override;
 };
 
 
@@ -102,16 +106,16 @@ struct vnode_kbc : vnode {
 
 struct vnode_pipe : vnode {
     const char* filename_ = "pipe";
-    virtual size_t read(uintptr_t buf, size_t sz, size_t& offset) override;
-    virtual size_t write(uintptr_t buf, size_t sz, size_t& offset) override;
+    virtual size_t read(uintptr_t buf, size_t sz, size_t& off) override;
+    virtual size_t write(uintptr_t buf, size_t sz, size_t& off) override;
 };
 
 
 // memfs files
 
 struct vnode_memfile : vnode {
-    virtual size_t read(uintptr_t buf, size_t sz, size_t& offset) override;
-    virtual size_t write(uintptr_t buf, size_t sz, size_t& offset) override;
+    virtual size_t read(uintptr_t buf, size_t sz, size_t& off) override;
+    virtual size_t write(uintptr_t buf, size_t sz, size_t& off) override;
 
     vnode_memfile(memfile* m) : m_(m) { filename_ = m->name_; };
 
