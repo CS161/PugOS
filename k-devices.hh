@@ -91,6 +91,7 @@ struct memfile {
     static memfile initfs[initfs_size];
     static inline memfile* initfs_lookup(const char* name);
     static memfile* initfs_lookup(const char* name, size_t namelen);
+    static spinlock lock_;
 };
 
 

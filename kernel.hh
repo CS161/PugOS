@@ -78,7 +78,6 @@ struct __attribute__((aligned(4096))) proc {
 };
 
 #include "k-wait.hh"
-#include "k-fs.hh"
 
 #define NPROC 16
 extern proc* ptable[NPROC];

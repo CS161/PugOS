@@ -1,6 +1,8 @@
 #ifndef CHICKADEE_K_FS_HH
 #define CHICKADEE_K_FS_HH
-#include "kernel.hh"
+#include "k-devices.hh"
+#include "k-wait.hh"
+#include "k-lock.hh"
 
 #define NFDS 256
 
@@ -21,64 +23,68 @@ struct bbuffer {
    wait_queue nonempty_wq_;
 
    bbuffer() : buf_{0}, pos_(0), len_(0), read_closed_(false),
-   			   write_closed_(false) { };
+               write_closed_(false) { };
 };
 
 
 struct vnode {
-	const char* filename_;
+    const char* filename_;
 
-	// bounded buffer for pipes
-	bbuffer* bb_;
-	
-	// lock_ guards everything below it
-	spinlock lock_;
-	int refs_;
-	size_t sz_;
+    // bounded buffer for pipes
+    bbuffer* bb_;
+    
+    // lock_ guards everything below it
+    spinlock lock_;
+    int refs_;
+    size_t sz_;
 
-	virtual size_t read(uintptr_t buf, size_t sz) { return E_PERM; };
-	virtual size_t write(uintptr_t buf, size_t sz) { return E_PERM; };
-	virtual int link() { return E_PERM; };
-	virtual int unlink() { return E_PERM; };
-	virtual int symlink() { return E_PERM; };
-	virtual int creat() { return E_PERM; };
-	virtual int mkdir() { return E_PERM; };
-	virtual int rmdir() { return E_PERM; };
-	virtual int rename() { return E_PERM; };
+    virtual size_t read(uintptr_t buf, size_t sz, size_t& offset) { return E_PERM; };
+    virtual size_t write(uintptr_t buf, size_t sz, size_t& offset) { return E_PERM; };
+    // virtual int link() { return E_PERM; };
+    // virtual int unlink() { return E_PERM; };
+    // virtual int symlink() { return E_PERM; };
+    // virtual int creat() { return E_PERM; };
+    // virtual int mkdir() { return E_PERM; };
+    // virtual int rmdir() { return E_PERM; };
+    // virtual int rename() { return E_PERM; };
 
-	vnode() : bb_(nullptr), refs_(1), sz_(0) { };
-	~vnode();
+    vnode() : bb_(nullptr), refs_(1), sz_(0) { };
+    ~vnode();
 };
 
 
 struct file {
-	enum type_t {
-		normie, pipe, directory
-	};
+    enum type_t {
+        normie, pipe, directory
+    };
 
-	type_t type_;
-	bool readable_;
-	bool writeable_;
-	vnode* vnode_;
-	
-	// lock_ guards everything below it
-	spinlock lock_;
-	int refs_; // for threading later
-	void deref();
-	size_t off_;
+    type_t type_;
+    bool readable_;
+    bool writeable_;
+    vnode* vnode_;
+    
+    // lock_ guards everything below it
+    spinlock lock_;
+    int refs_; // for threading later
+    void deref();
 
-	file() : refs_(1), off_(0) { };
-	~file();
+    file() : refs_(1), off_internal_(0) { };
+    ~file();
+
+    size_t &off_ = off_internal_;
+
+  private:
+    size_t off_internal_;
 };
 
 
 struct fdtable {
-	// lock_ guards everything below it
-	spinlock lock_;
-	int refs_; // for threading
-	file* fds_[NFDS]; // LENGTH: global constant
+    // lock_ guards everything below it
+    spinlock lock_;
+    int refs_; // for threading
+    file* fds_[NFDS]; // LENGTH: global constant
 
-	fdtable() : refs_(1), fds_{nullptr} { };
+    fdtable() : refs_(1), fds_{nullptr} { };
 };
 
 
@@ -86,18 +92,31 @@ struct fdtable {
 // fd 0-2 Keyboard/Console
 
 struct vn_keyboard_console : vnode {
-	const char* filename_ = "keyboard/console";
-    virtual size_t read(uintptr_t buf, size_t sz) override;
-    virtual size_t write(uintptr_t buf, size_t sz) override;
+    const char* filename_ = "keyboard/console";
+    virtual size_t read(uintptr_t buf, size_t sz, size_t& offset) override;
+    virtual size_t write(uintptr_t buf, size_t sz, size_t& offset) override;
 };
 
 
 // pipes
 
 struct vn_pipe : vnode {
-	const char* filename_ = "pipe";
-	virtual size_t read(uintptr_t buf, size_t sz) override;
-    virtual size_t write(uintptr_t buf, size_t sz) override;
+    const char* filename_ = "pipe";
+    virtual size_t read(uintptr_t buf, size_t sz, size_t& offset) override;
+    virtual size_t write(uintptr_t buf, size_t sz, size_t& offset) override;
+};
+
+
+// memfs files
+
+struct vn_memfile : vnode {
+    virtual size_t read(uintptr_t buf, size_t sz, size_t& offset) override;
+    virtual size_t write(uintptr_t buf, size_t sz, size_t& offset) override;
+
+    vn_memfile(memfile* m) : m_(m) { filename_ = m->name_; };
+
+  private:
+    memfile* m_;
 };
 
 

@@ -1,6 +1,7 @@
 #include "kernel.hh"
 #include "k-apic.hh"
 #include "k-devices.hh"
+#include "k-fs.hh"
 #include "k-vmiter.hh"
 
 // kernel.cc
@@ -328,6 +329,39 @@ int seppuku() {
 }
 
 
+// validate_memory(addr, sz, perms)
+//    Returns true if [addr, addr + sz) all has permissions = perms and is in
+//    valid address space.
+
+bool validate_memory(uintptr_t addr, size_t sz = 0, int perms = 0) {
+    return !(!addr
+             || addr + sz > VA_LOWEND
+             || addr > VA_HIGHMAX - sz
+             || (sz > 0 ? !vmiter(current(), addr).check_range(sz, perms)
+                        : false));
+}
+
+template <typename T>
+bool validate_memory(T* addr, size_t sz = 0, int perms = 0) {
+    return validate_memory(reinterpret_cast<uintptr_t>(addr), sz, perms);
+}
+
+
+// check_string_termination(str, max_len)
+//    Checks if a string terminates within max_len characters. Returns -1 if not
+//    or the length of the string if it does.
+
+int check_string_termination(const char* str, int max_len) {
+    for (int i = 0; i < max_len; i++) {
+        if (!validate_memory(&str[i], 1, PTE_P | PTE_U))
+            return -1;
+        else if (str[i] == '\0')
+            return i;
+    }
+    return -1;
+}
+
+
 // proc::exception(reg)
 //    Exception handler (for interrupts, traps, and faults).
 //
@@ -587,6 +621,7 @@ uintptr_t proc::syscall(regstate* regs) {
         break;
     }
 
+    // DEBUG ONLY - could probably be used to crash the kernel
     case SYSCALL_LOG_PRINTF: {
         const char* format = reinterpret_cast<const char*>(regs->reg_rdi);
         va_list* args = reinterpret_cast<va_list*>(regs->reg_rsi);
@@ -633,9 +668,7 @@ uintptr_t proc::syscall(regstate* regs) {
         if (regs->reg_rax == SYSCALL_READ) {
             mem_flags |= PTE_W;
         }
-        if (addr + sz > VA_LOWEND
-              || addr > VA_HIGHMAX - sz
-              || !vmiter(this, addr).check_range(sz, mem_flags)) {
+        if (!validate_memory(addr, sz, mem_flags)) {
             fdtable_->lock_.unlock(irqs);
             r = E_FAULT;
             debug_printf("returning E_FAULT\n");
@@ -649,10 +682,10 @@ uintptr_t proc::syscall(regstate* regs) {
         f->lock_.unlock(irqs);
 
         if (regs->reg_rax == SYSCALL_READ) {
-            r = f->vnode_->read(addr, sz);
+            r = f->vnode_->read(addr, sz, f->off_);
         }
         else {
-            r = f->vnode_->write(addr, sz);
+            r = f->vnode_->write(addr, sz, f->off_);
         }
 
         f->deref();
@@ -704,6 +737,104 @@ uintptr_t proc::syscall(regstate* regs) {
         fdtable_->lock_.unlock(irqs);
 
         r = 0;
+        break;
+    }
+
+    case SYSCALL_OPEN: {
+        const char* path = reinterpret_cast<const char*>(regs->reg_rdi);
+        int flags = regs->reg_rsi;
+        bool created = false;
+        debug_printf("Opening a file\n");
+
+        if (!validate_memory(path)) {
+            r = E_FAULT;
+            break;
+        }
+        auto path_sz = check_string_termination(path, memfile::namesize);
+        if (path_sz < 0) {
+            r = E_INVAL;
+            break;
+        } else if (!validate_memory(path, path_sz, PTE_P | PTE_U)) {
+            r = E_FAULT;
+            break;
+        }
+
+        auto irqs = memfile::lock_.lock();
+        memfile* m = memfile::initfs_lookup(path);
+
+        if (m == nullptr) {
+            if (flags & OF_CREATE) {
+                // create new empty file with name
+                size_t new_index = -1;
+                for (size_t i = 0; i < memfile::initfs_size; i++) {
+                    if (memfile::initfs[i].empty()) {
+                        new_index = i;
+                        break;
+                    }
+                }
+                // unless no room, then fault
+                if (new_index == (size_t) -1) {
+                    r = E_NOSPC;
+                    memfile::lock_.unlock(irqs);
+                    break;
+                }
+
+                m = &memfile::initfs[new_index];
+                auto data = reinterpret_cast<unsigned char*>(kallocpage());
+                if (!data) {
+                    memfile::lock_.unlock(irqs);
+                    r = E_NOMEM;
+                    break;
+                }
+                *m = memfile(path, data, data + PAGESIZE);
+                created = true;
+            }
+            else {
+                r = E_NOENT;
+                memfile::lock_.unlock(irqs);
+                break;
+            }
+        }
+        memfile::lock_.unlock(irqs);
+
+        if (flags & OF_TRUNC) {
+            m->len_ = 0;
+        }
+
+        int fd = -1;
+        irqs = fdtable_->lock_.lock();
+        for (int i = 0; i < NFDS; i++) {
+            if (fdtable_->fds_[i] == nullptr) {
+                fd = i;
+                break;
+            }
+        }
+        // couldn't find an open file descriptor
+        if (fd == -1) {
+            r = E_MFILE;
+            fdtable_->lock_.unlock(irqs);
+            m = nullptr;
+            break;
+        }
+
+        file* f = knew<file>();
+        vnode* v = knew<vn_memfile>(m);
+        if (!f || !v) {
+            kdelete(f);
+            kdelete(v);
+            m = nullptr;
+            fdtable_->lock_.unlock(irqs);
+            break;
+        }
+        fdtable_->fds_[fd] = f;
+        fdtable_->lock_.unlock(irqs);
+        f->readable_ = flags & OF_READ;
+        f->writeable_ = flags & OF_WRITE;
+        f->type_ = file::normie;
+        f->vnode_ = v;
+
+        r = fd;
+
         break;
     }
 

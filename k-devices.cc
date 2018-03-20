@@ -246,6 +246,8 @@ memfile* memfile::initfs_lookup(const char* name, size_t namelen) {
     return nullptr;
 }
 
+spinlock memfile::lock_;
+
 
 // ahcistate: functions for dealing with SATA disks
 

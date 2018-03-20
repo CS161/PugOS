@@ -1,5 +1,6 @@
 #include "kernel.hh"
 #include "k-devices.hh"
+#include "k-fs.hh"
 
 
 
@@ -51,7 +52,8 @@ file::~file() {
 
 // vn_keyboard_console
 
-size_t vn_keyboard_console::read(uintptr_t buf, size_t sz) {
+size_t vn_keyboard_console::read(uintptr_t buf, size_t sz, size_t& offset) {
+	(void) offset;
 	auto& kbd = keyboardstate::get();
     auto irqs = kbd.lock_.lock();
 
@@ -88,7 +90,8 @@ size_t vn_keyboard_console::read(uintptr_t buf, size_t sz) {
 }
 
 
-size_t vn_keyboard_console::write(uintptr_t buf, size_t sz) {
+size_t vn_keyboard_console::write(uintptr_t buf, size_t sz, size_t& offset) {
+	(void) offset;
     auto& csl = consolestate::get();
     auto irqs = csl.lock_.lock();
 
@@ -108,7 +111,8 @@ size_t vn_keyboard_console::write(uintptr_t buf, size_t sz) {
 
 // vn_pipe
 
-size_t vn_pipe::read(uintptr_t buf, size_t sz) {
+size_t vn_pipe::read(uintptr_t buf, size_t sz, size_t& offset) {
+	(void) offset;
     size_t input_pos = 0;
     char* input_buf = reinterpret_cast<char*>(buf);
 
@@ -151,7 +155,8 @@ size_t vn_pipe::read(uintptr_t buf, size_t sz) {
 }
 
 
-size_t vn_pipe::write(uintptr_t buf, size_t sz) {
+size_t vn_pipe::write(uintptr_t buf, size_t sz, size_t& offset) {
+	(void) offset;
     size_t input_pos = 0;
     const char* input_buf = reinterpret_cast<const char*>(buf);
 
@@ -191,4 +196,54 @@ size_t vn_pipe::write(uintptr_t buf, size_t sz) {
     	bb_->nonempty_wq_.wake_all();
         return input_pos;
     }
+}
+
+
+
+// vn_memfile
+
+size_t vn_memfile::read(uintptr_t buf, size_t sz, size_t& offset) {
+    auto irqs = memfile::lock_.lock();
+
+    // fuck blocking
+
+    // read that line or lines
+    size_t n = 0;
+    while (n + offset < m_->len_ && n < sz) {
+        *reinterpret_cast<char*>(buf) = m_->data_[n + offset];
+        ++buf;
+        ++n;
+    }
+
+    offset += n;
+    memfile::lock_.unlock(irqs);
+    return n;
+}
+
+
+size_t vn_memfile::write(uintptr_t buf, size_t sz, size_t& offset) {
+    auto irqs = memfile::lock_.lock();
+
+    size_t n = 0;
+    while (n < sz) {
+        if (m_->len_ == m_->capacity_) {
+            // Do some crazy shit -- allocate more memory
+            unsigned char* new_data = reinterpret_cast<unsigned char*>(
+                kalloc(m_->capacity_ << 1));
+            memcpy(new_data, m_->data_, m_->len_);
+            kfree(m_->data_);
+            m_->data_ = new_data;
+            m_->capacity_ <<= 1;
+        }
+        else {
+            m_->data_[m_->len_] = *reinterpret_cast<const char*>(buf);
+            ++buf;
+            ++n;
+            ++m_->len_;
+        }
+    }
+
+    offset += n;
+    memfile::lock_.unlock(irqs);
+    return n;
 }
