@@ -746,16 +746,9 @@ uintptr_t proc::syscall(regstate* regs) {
         bool created = false;
         debug_printf("Opening a file\n");
 
-        if (!validate_memory(path)) {
-            r = E_FAULT;
-            break;
-        }
         auto path_sz = check_string_termination(path, memfile::namesize);
         if (path_sz < 0) {
             r = path_sz;
-            break;
-        } else if (!validate_memory(path, path_sz, PTE_P | PTE_U)) {
-            r = E_FAULT;
             break;
         }
 
@@ -890,6 +883,74 @@ uintptr_t proc::syscall(regstate* regs) {
         fdtable_->lock_.unlock(irqs);
 
         r = rfd | (wfd << 32);
+        break;
+    }
+
+    case SYSCALL_EXECV: {
+        auto program_name = reinterpret_cast<const char*>(regs->reg_rdi);
+        auto argv = reinterpret_cast<const char* const*>(regs->reg_rsi);
+        size_t argc = regs->reg_rdx;
+
+        auto name_sz = check_string_termination(program_name,
+                                                memfile::namesize);
+        if (name_sz < 0) {
+            r = name_sz;
+            break;
+        }
+
+        // TODO: VALIDATE ARGS
+
+        // allocate all the memory
+        auto npt = kalloc_pagetable();
+        x86_64_page* stkpg = kallocpage();
+        if (!npt || !stkpg) {
+            kdelete(npt);
+            kdelete(stkpg);
+            r = E_NOMEM;
+            break;
+        }
+
+        // save things clobbered by init_user
+        regstate old_regs = *regs_;
+        x86_64_pagetable* old_pt = pagetable_;
+
+        // yieldstate* old_yields = yields_;
+        // init_user(pid_, npt);
+        // yields_ = old_yields;
+
+        // auto irqs = memfile::lock_.lock();
+        // auto load_r = load(program_name);
+        // memfile::lock_.unlock(irqs);
+        // if (load_r <= 0) {
+        //     pagetable_ = old_pt;
+        //     *regs_ = old_regs;
+        //     kdelete(npt);
+        //     kdelete(stkpg);
+        //     r = load_r;
+        //     break;
+        // }
+
+        // regs_->reg_rsp = MEMSIZE_VIRTUAL - 8; // align stack by 16 bytes
+        // assert(vmiter(this, MEMSIZE_VIRTUAL - PAGESIZE).map(ka2pa(stkpg)) >= 0);
+        // assert(vmiter(this, ktext2pa(console)).map(ktext2pa(console),
+        //                                         PTE_P | PTE_W | PTE_U) >= 0);
+
+        // // free old memory
+        // for (vmiter vmit(old_pt); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
+        //     if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
+        //         kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
+        //         assert(vmiter(old_pt, vmit.va()).map(0x0) >= 0);
+        //     }
+        // }
+        // for (ptiter ptit(old_pt, 0); ptit.low(); ptit.next()) {
+        //     kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
+        // }
+        // kdelete(old_pt);
+
+        // set_pagetable(pagetable_);
+
+        // yield_noreturn();
+
         break;
     }
 

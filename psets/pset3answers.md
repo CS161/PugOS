@@ -20,9 +20,7 @@ added a filename on keyboard/console and pipe vnodes (why? who knows)
 
 sys read and write throw ebadf not eperm on read/write bad perms
 
-no offset in read write?
-
-
+offset ref on file, passed into vnode functions
 
 Grading notes
 -------------

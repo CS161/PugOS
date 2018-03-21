@@ -291,7 +291,6 @@ static void check_pages_invariants() {
 // test_kalloc
 //    Run unit tests on the kalloc system.
 void test_kalloc() {
-    log_printf("\n\ntesting kalloc, probably bootup\n");
     // helper functions
     assert(find_max_order(7, 10) == -1);
     assert(find_max_order(0x1000, 0x10000) == 12);
@@ -314,7 +313,8 @@ void test_kalloc() {
         auto ptr = kalloc(1 << order);
         check_pages_invariants();
         if (ptr == nullptr) {
-            log_printf("WARNING: kalloc could not allocate order %d\n", order);
+            debug_printf("WARNING: kalloc could not allocate order %d\n",
+                         order);
             continue;
         }
         int pindex = ka2pa(ptr) / PAGESIZE;
