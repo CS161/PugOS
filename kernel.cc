@@ -1,7 +1,7 @@
 #include "kernel.hh"
 #include "k-apic.hh"
 #include "k-devices.hh"
-#include "k-fs.hh"
+#include "k-vfs.hh"
 #include "k-vmiter.hh"
 
 // kernel.cc
