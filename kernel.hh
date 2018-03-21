@@ -28,10 +28,10 @@ struct __attribute__((aligned(4096))) proc {
     regstate* regs_;                   // process's current registers
     yieldstate* yields_;               // process's current yield state
 
-    list_links runq_links_;             // for cpu run queue
-    list_links child_links_;            // for reparenting
+    list_links runq_link_;             // for cpu run queue
+    list_links child_link_;            // for reparenting
 
-    list<proc, &proc::child_links_> children_;   // procs st. ppid_ = this->pid_
+    list<proc, &proc::child_link_> children_;   // procs st. ppid_ = this->pid_
 
     enum state_t {
         blank = 0, runnable, blocked, broken
@@ -101,7 +101,7 @@ struct __attribute__((aligned(4096))) cpustate {
     int index_;
     int lapic_id_;
 
-    list<proc, &proc::runq_links_> runq_;
+    list<proc, &proc::runq_link_> runq_;
     spinlock runq_lock_;
     unsigned long nschedule_;
     proc* idle_task_;
