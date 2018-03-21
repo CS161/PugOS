@@ -150,32 +150,39 @@ void process_exit(proc* p, int status = 0) {
 }
 
 
+// nuke_pagetable(pt)
+//    Wipes all memory associated with pagetable pt. MUST be called on an L4 pt
+void nuke_pagetable(x86_64_pagetable* pt) {
+    // free virtual memory
+    for (vmiter vmit(pt); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
+        if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
+            kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
+            assert(vmiter(pt, vmit.va()).map(0x0) >= 0);
+        }
+    }
+
+    // free L3-L1 pagetables
+    for (ptiter ptit(pt, 0); ptit.low(); ptit.next()) {
+        kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
+    }
+
+    // free L4 pagetable
+    kdelete(pt);
+}
+
+
 // omae wa mou shindeiru
 int process_reap(pid_t pid) {
     auto irqs = ptable_lock.lock();
     proc* p = ptable[pid];
 
-    kdelete(p->fdtable_);
-
-    // free virtual memory
-    for (vmiter vmit(p); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
-        if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
-            kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
-            int r = vmiter(p->pagetable_, vmit.va()).map(0x0);
-            assert(r >= 0);
-        }
-    }
-
-    // free L3-L1 pagetables
-    for (ptiter ptit(p, 0); ptit.low(); ptit.next()) {
-        kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
-    }
-
     // erase proc from parent's children
     ptable[p->ppid_]->children_.erase(p);
 
+    // wipe everything else
+    kdelete(p->fdtable_);
+    nuke_pagetable(p->pagetable_);
     int exit_status = p->exit_status_;
-    kfree(p->pagetable_);
     kfree(p);
     ptable[pid] = nullptr;
     ptable_lock.unlock(irqs);
@@ -523,13 +530,15 @@ uintptr_t proc::syscall(regstate* regs) {
     case SYSCALL_MSLEEP: {
         interrupted_ = false;
         unsigned long end = ticks + (regs->reg_rdi + 9) / 10;
-        debug_printf("[%d] sys_msleep(%d)\n", pid_, regs->reg_rdi);
+        // debug_printf("[%d] sys_msleep(%d)\n", pid_, regs->reg_rdi);
         waiter w(this);
         auto wq = &sleep_wheel.wqs_[end % WHEEL_SPOKES];
         while (true) {
             w.prepare(wq);
+            // debug_printf("[%d] sys_msleep woken\n", pid_);
             if ((long) (end - ticks) <= 0 || interrupted_)
                 break;
+            // debug_printf("[%d] sys_msleep blocking\n", pid_);
             w.block();
         }
         w.clear();
@@ -891,18 +900,20 @@ uintptr_t proc::syscall(regstate* regs) {
         auto argv = reinterpret_cast<const char* const*>(regs->reg_rsi);
         size_t argc = regs->reg_rdx;
 
-        auto name_sz = check_string_termination(program_name,
-                                                memfile::namesize);
+        auto name_sz =
+            check_string_termination(program_name, memfile::namesize);
         if (name_sz < 0) {
             r = name_sz;
             break;
         }
 
+        debug_printf("[%d] sys_execv %s\n", pid_, program_name);
+
         // TODO: VALIDATE ARGS
 
         // allocate all the memory
         auto npt = kalloc_pagetable();
-        x86_64_page* stkpg = kallocpage();
+        auto stkpg = kallocpage();
         if (!npt || !stkpg) {
             kdelete(npt);
             kdelete(stkpg);
@@ -911,52 +922,46 @@ uintptr_t proc::syscall(regstate* regs) {
         }
 
         // save things clobbered by init_user
-        regstate old_regs = *regs_;
-        x86_64_pagetable* old_pt = pagetable_;
+        auto old_pt = pagetable_;
+        auto old_yields = yields_;
 
-        yieldstate* old_yields = yields_;
+        // set up regs_ and pagetable_
         init_user(pid_, npt);
         yields_ = old_yields;
 
+        // align stack by 16 bytes
+        regs_->reg_rsp = MEMSIZE_VIRTUAL - 8;
+
+        // map stackpage and console into vm
+        assert(vmiter(this, MEMSIZE_VIRTUAL - PAGESIZE).map(ka2pa(stkpg),
+                                                PTE_P | PTE_W | PTE_U) >= 0);
+        assert(vmiter(this, ktext2pa(console)).map(ktext2pa(console),
+                                                PTE_P | PTE_W | PTE_U) >= 0);
+
+        // load program
         auto irqs = memfile::lock_.lock();
         auto load_r = load(program_name);
         memfile::lock_.unlock(irqs);
-        if (load_r <= 0) {
+        if (load_r < 0) {
+            nuke_pagetable(npt);
             pagetable_ = old_pt;
-            *regs_ = old_regs;
+            *regs_ = *regs;
             kdelete(npt);
             kdelete(stkpg);
             r = load_r;
             break;
         }
 
-        regs_->reg_rsp = MEMSIZE_VIRTUAL - 8; // align stack by 16 bytes
-        assert(vmiter(this, MEMSIZE_VIRTUAL - PAGESIZE).map(ka2pa(stkpg)) >= 0);
-        assert(vmiter(this, ktext2pa(console)).map(ktext2pa(console),
-                                                PTE_P | PTE_W | PTE_U) >= 0);
-
-        // free old memory
-        for (vmiter vmit(old_pt); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
-            if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
-                kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
-                assert(vmiter(old_pt, vmit.va()).map(0x0) >= 0);
-            }
-        }
-        for (ptiter ptit(old_pt, 0); ptit.low(); ptit.next()) {
-            kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
-        }
-        kdelete(old_pt);
+        nuke_pagetable(old_pt);
 
         set_pagetable(pagetable_);
-
         yield_noreturn();
-
-        break;
+        break; // never reached
     }
 
     default:
         // no such system call
-        log_printf("%d: no such system call %u\n", pid_, regs->reg_rax);
+        log_printf("[%d] no such system call %u\n", pid_, regs->reg_rax);
         r = E_NOSYS;
     }
 
