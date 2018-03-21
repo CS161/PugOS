@@ -616,10 +616,10 @@ uintptr_t proc::syscall(regstate* regs) {
         break;
     }
 
-    case SYSCALL_COMMIT_SEPPUKU: {
-        r = seppuku();
-        break;
-    }
+    // case SYSCALL_COMMIT_SEPPUKU: {
+    //     r = seppuku();
+    //     break;
+    // }
 
     // DEBUG ONLY - could probably be used to crash the kernel
     case SYSCALL_LOG_PRINTF: {
@@ -914,42 +914,42 @@ uintptr_t proc::syscall(regstate* regs) {
         regstate old_regs = *regs_;
         x86_64_pagetable* old_pt = pagetable_;
 
-        // yieldstate* old_yields = yields_;
-        // init_user(pid_, npt);
-        // yields_ = old_yields;
+        yieldstate* old_yields = yields_;
+        init_user(pid_, npt);
+        yields_ = old_yields;
 
-        // auto irqs = memfile::lock_.lock();
-        // auto load_r = load(program_name);
-        // memfile::lock_.unlock(irqs);
-        // if (load_r <= 0) {
-        //     pagetable_ = old_pt;
-        //     *regs_ = old_regs;
-        //     kdelete(npt);
-        //     kdelete(stkpg);
-        //     r = load_r;
-        //     break;
-        // }
+        auto irqs = memfile::lock_.lock();
+        auto load_r = load(program_name);
+        memfile::lock_.unlock(irqs);
+        if (load_r <= 0) {
+            pagetable_ = old_pt;
+            *regs_ = old_regs;
+            kdelete(npt);
+            kdelete(stkpg);
+            r = load_r;
+            break;
+        }
 
-        // regs_->reg_rsp = MEMSIZE_VIRTUAL - 8; // align stack by 16 bytes
-        // assert(vmiter(this, MEMSIZE_VIRTUAL - PAGESIZE).map(ka2pa(stkpg)) >= 0);
-        // assert(vmiter(this, ktext2pa(console)).map(ktext2pa(console),
-        //                                         PTE_P | PTE_W | PTE_U) >= 0);
+        regs_->reg_rsp = MEMSIZE_VIRTUAL - 8; // align stack by 16 bytes
+        assert(vmiter(this, MEMSIZE_VIRTUAL - PAGESIZE).map(ka2pa(stkpg)) >= 0);
+        assert(vmiter(this, ktext2pa(console)).map(ktext2pa(console),
+                                                PTE_P | PTE_W | PTE_U) >= 0);
 
-        // // free old memory
-        // for (vmiter vmit(old_pt); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
-        //     if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
-        //         kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
-        //         assert(vmiter(old_pt, vmit.va()).map(0x0) >= 0);
-        //     }
-        // }
-        // for (ptiter ptit(old_pt, 0); ptit.low(); ptit.next()) {
-        //     kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
-        // }
-        // kdelete(old_pt);
+        // free old memory
+        for (vmiter vmit(old_pt); vmit.va() < MEMSIZE_VIRTUAL; vmit.next()) {
+            if (vmit.user() && vmit.writable() && vmit.pa() != ktext2pa(console)) {
+                kfree(reinterpret_cast<void*>(pa2ka(vmit.pa())));
+                assert(vmiter(old_pt, vmit.va()).map(0x0) >= 0);
+            }
+        }
+        for (ptiter ptit(old_pt, 0); ptit.low(); ptit.next()) {
+            kfree(reinterpret_cast<void*>(pa2ka(ptit.ptp_pa())));
+        }
+        kdelete(old_pt);
 
-        // set_pagetable(pagetable_);
+        set_pagetable(pagetable_);
 
-        // yield_noreturn();
+        yield_noreturn();
 
         break;
     }
