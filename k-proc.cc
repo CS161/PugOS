@@ -132,8 +132,6 @@ int proc::load(const char* binary_name) {
         return E_NOENT;
     }
 
-    debug_printf("proc::load found fs\n");
-
     // validate the binary
     if (fs->len_ < sizeof(elf_header)) {
         return E_NOEXEC;
@@ -161,7 +159,6 @@ int proc::load(const char* binary_name) {
             || VA_LOWEND - ph[i].p_va < ph[i].p_memsz) {
             return E_NOEXEC;
         }
-        debug_printf("loading program segment i=%d...\n", i);
         int r = load_segment(&ph[i], fs->data_ + ph[i].p_offset);
         if (r < 0) {
             return r;

@@ -209,7 +209,6 @@ inline void sys_log_printf(const char* format, ...) {
 //    only on failure.
 inline int sys_execv(const char* program_name, const char* const* argv,
                      size_t argc) {
-    sys_log_printf("sys_execv: argv = %p\n", argv);
     return syscall0(SYSCALL_EXECV,
                     reinterpret_cast<uintptr_t>(program_name),
                     reinterpret_cast<uintptr_t>(argv), argc);

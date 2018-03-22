@@ -907,8 +907,8 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
-        debug_printf("[%d] sys_execv %s argc = %d argv = %p\n",
-            pid_, program_name, argc, argv);
+        debug_printf("[%d] sys_execv %s argc = %d\n",
+            pid_, program_name, argc);
 
         // TODO: validate args
 
@@ -928,30 +928,23 @@ uintptr_t proc::syscall(regstate* regs) {
         // get the total length of the argv array
         size_t argv_len = 0;
         for (size_t i = 0; i < argc; i++) {
-            debug_printf("execv: strlen(argv[%d]) \"%s\" @%p: %d\n",
-                i, (char*) argv[i], &argv[i], strlen(argv[i]));
             argv_len += strlen(argv[i]) + 1;
         }
-        debug_printf("execv: argv_len = %d\n", argv_len);
 
         // get the amount of memory for the ptrs to strings
         size_t sz_argv_ptrs = 8 * (argc + 1);
-        debug_printf("execv: sz_argv_ptrs = %d\n", sz_argv_ptrs);
 
         // 8-byte align argv_len
         size_t mem_diff = argv_len;
         if (argv_len % 8 != 0) {
             mem_diff = ((argv_len / 8) + 1) * 8;
         }
-        debug_printf("execv: aligned argv_len = %d\n", mem_diff);
         mem_diff += sz_argv_ptrs;
-        debug_printf("execv: mem_diff = %d\n", mem_diff);
 
         // copy each string to the top of the stack page
         auto stkpg_top = reinterpret_cast<uintptr_t>(stkpg) + PAGESIZE;
         size_t arg_len = 0;
         for (size_t i = 0; i < argc; i++) {
-            debug_printf("execv: copying string i = %d: \"%s\"\n", i, argv[i]);
             // destination in stack page for string
             uintptr_t argv_ptr =
                 MEMSIZE_VIRTUAL - mem_diff + sz_argv_ptrs + arg_len;
