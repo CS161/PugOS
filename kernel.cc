@@ -968,6 +968,7 @@ uintptr_t proc::syscall(regstate* regs) {
 
         // save things clobbered by init_user
         auto old_pt = pagetable_;
+        auto old_regs = *regs;
         auto old_yields = yields_;
 
         // set up regs_ and pagetable_
@@ -990,9 +991,7 @@ uintptr_t proc::syscall(regstate* regs) {
         if (load_r < 0) {
             nuke_pagetable(npt);
             pagetable_ = old_pt;
-            *regs_ = *regs;
-            kdelete(npt);
-            kdelete(stkpg);
+            *regs_ = old_regs;
             r = load_r;
             break;
         }
