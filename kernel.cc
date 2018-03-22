@@ -907,9 +907,10 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
-        debug_printf("[%d] sys_execv %s\n", pid_, program_name);
+        debug_printf("[%d] sys_execv %s argc = %d argv = %p\n",
+            pid_, program_name, argc, argv);
 
-        // TODO: VALIDATE ARGS
+        // TODO: validate args
 
         // allocate all the memory
         auto npt = kalloc_pagetable();
@@ -920,6 +921,59 @@ uintptr_t proc::syscall(regstate* regs) {
             r = E_NOMEM;
             break;
         }
+
+
+
+
+        // get the total length of the argv array
+        size_t argv_len = 0;
+        for (size_t i = 0; i < argc; i++) {
+            debug_printf("execv: strlen(argv[%d]) \"%s\" @%p: %d\n",
+                i, (char*) argv[i], &argv[i], strlen(argv[i]));
+            argv_len += strlen(argv[i]) + 1;
+        }
+        debug_printf("execv: argv_len = %d\n", argv_len);
+
+        // get the amount of memory for the ptrs to strings
+        size_t sz_argv_ptrs = 8 * (argc + 1);
+        debug_printf("execv: sz_argv_ptrs = %d\n", sz_argv_ptrs);
+
+        // 8-byte align argv_len
+        size_t mem_diff = argv_len;
+        if (argv_len % 8 != 0) {
+            mem_diff = ((argv_len / 8) + 1) * 8;
+        }
+        debug_printf("execv: aligned argv_len = %d\n", mem_diff);
+        mem_diff += sz_argv_ptrs;
+        debug_printf("execv: mem_diff = %d\n", mem_diff);
+
+        // copy each string to the top of the stack page
+        auto stkpg_top = reinterpret_cast<uintptr_t>(stkpg) + PAGESIZE;
+        size_t arg_len = 0;
+        for (size_t i = 0; i < argc; i++) {
+            debug_printf("execv: copying string i = %d: \"%s\"\n", i, argv[i]);
+            // destination in stack page for string
+            uintptr_t argv_ptr =
+                MEMSIZE_VIRTUAL - mem_diff + sz_argv_ptrs + arg_len;
+            // copy in string
+            memcpy(reinterpret_cast<void*>(stkpg_top - (MEMSIZE_VIRTUAL - argv_ptr)),
+                argv[i], strlen(argv[i]) + 1);
+            // copy pointer to string
+            memcpy(reinterpret_cast<void*>(stkpg_top - mem_diff + 8 * i),
+                &argv_ptr, 8);
+            arg_len += strlen(argv[i]) + 1;
+        }
+        void* null = nullptr;
+        // null-terminate argv
+        memcpy(
+            reinterpret_cast<void*>(
+                stkpg_top - mem_diff + sz_argv_ptrs - 8),
+            &null,
+            8);
+
+
+
+
 
         // save things clobbered by init_user
         auto old_pt = pagetable_;
@@ -951,6 +1005,19 @@ uintptr_t proc::syscall(regstate* regs) {
             r = load_r;
             break;
         }
+
+
+        // set 1st argument to argc
+        regs_->reg_rdi = argc;
+
+        // set 2nd argument to argv pointer
+        regs_->reg_rsi =
+            reinterpret_cast<uintptr_t>(MEMSIZE_VIRTUAL - mem_diff);
+
+        // set rsp to bottom of argv data
+        uintptr_t below_argv = MEMSIZE_VIRTUAL - mem_diff - 8;
+        if (below_argv % 16 != 0) below_argv = ((below_argv / 16) - 1) * 16;
+        regs_->reg_rsp = regs_->reg_rbp = below_argv;
 
         nuke_pagetable(old_pt);
 

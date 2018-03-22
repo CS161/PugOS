@@ -193,12 +193,23 @@ inline int sys_pipe(int pfd[2]) {
     return r;
 }
 
+// sys_log_printf(format, args)
+inline void sys_log_printf(const char* format, ...) {
+    va_list val;
+    va_start(val, format);
+    syscall0(SYSCALL_LOG_PRINTF,
+             reinterpret_cast<uintptr_t>(format),
+             reinterpret_cast<uintptr_t>(&val));
+    va_end(val);
+}
+
 // sys_execv(program_name, argv, argc)
 //    Replace this process image with a new image running `program_name`
 //    with `argc` arguments, stored in argument array `argv`. Returns
 //    only on failure.
 inline int sys_execv(const char* program_name, const char* const* argv,
                      size_t argc) {
+    sys_log_printf("sys_execv: argv = %p\n", argv);
     return syscall0(SYSCALL_EXECV,
                     reinterpret_cast<uintptr_t>(program_name),
                     reinterpret_cast<uintptr_t>(argv), argc);
@@ -241,16 +252,6 @@ static inline int sys_map_console(void* addr) {
 //    Die an honorable death
 static inline int sys_commit_seppuku() {
     return syscall0(SYSCALL_COMMIT_SEPPUKU);
-}
-
-// sys_log_printf(format, args)
-inline void sys_log_printf(const char* format, ...) {
-    va_list val;
-    va_start(val, format);
-    syscall0(SYSCALL_LOG_PRINTF,
-             reinterpret_cast<uintptr_t>(format),
-             reinterpret_cast<uintptr_t>(&val));
-    va_end(val);
 }
 
 // OTHER HELPER FUNCTIONS
