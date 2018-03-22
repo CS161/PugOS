@@ -907,7 +907,7 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
-        debug_printf("[%d] sys_execv %s argc = %d\n",
+        debug_printf("[%d] sys_execv '%s' argc = %d\n",
             pid_, program_name, argc);
 
         // TODO: validate args
@@ -945,24 +945,22 @@ uintptr_t proc::syscall(regstate* regs) {
         auto stkpg_top = reinterpret_cast<uintptr_t>(stkpg) + PAGESIZE;
         size_t arg_len = 0;
         for (size_t i = 0; i < argc; i++) {
-            // destination in stack page for string
+            // copy string to stack page
+            memcpy(reinterpret_cast<void*>(
+                    stkpg_top - mem_diff + sz_argv_ptrs + arg_len),
+                argv[i], strlen(argv[i]) + 1);
+
+            // copy pointer to string to stack page
             uintptr_t argv_ptr =
                 MEMSIZE_VIRTUAL - mem_diff + sz_argv_ptrs + arg_len;
-            // copy in string
-            memcpy(reinterpret_cast<void*>(stkpg_top - (MEMSIZE_VIRTUAL - argv_ptr)),
-                argv[i], strlen(argv[i]) + 1);
-            // copy pointer to string
             memcpy(reinterpret_cast<void*>(stkpg_top - mem_diff + 8 * i),
                 &argv_ptr, 8);
+
             arg_len += strlen(argv[i]) + 1;
         }
-        void* null = nullptr;
-        // null-terminate argv
-        memcpy(
-            reinterpret_cast<void*>(
-                stkpg_top - mem_diff + sz_argv_ptrs - 8),
-            &null,
-            8);
+        // null-terminate argv pointer array
+        *reinterpret_cast<void**>(stkpg_top - mem_diff + sz_argv_ptrs - 8) =
+            nullptr;
 
 
 
