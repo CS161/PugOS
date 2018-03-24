@@ -1,5 +1,6 @@
 #include "kernel.hh"
 #include "k-apic.hh"
+#include "k-chkfs.hh"
 #include "k-devices.hh"
 #include "k-vfs.hh"
 #include "k-vmiter.hh"
@@ -922,14 +923,15 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
-
-
+        debug_printf("execv: kalloc'd\n");
 
         // get the total length of the argv array
         size_t argv_len = 0;
         for (size_t i = 0; i < argc; i++) {
             argv_len += strlen(argv[i]) + 1;
         }
+
+        debug_printf("execv: strlen'd\n");
 
         // get the amount of memory for the ptrs to strings
         size_t sz_argv_ptrs = 8 * (argc + 1);
@@ -945,10 +947,14 @@ uintptr_t proc::syscall(regstate* regs) {
         auto stkpg_top = reinterpret_cast<uintptr_t>(stkpg) + PAGESIZE;
         size_t arg_len = 0;
         for (size_t i = 0; i < argc; i++) {
+            debug_printf("execv: strlen'ing i = %d\n", i);
+
             // copy string to stack page
             memcpy(reinterpret_cast<void*>(
                     stkpg_top - mem_diff + sz_argv_ptrs + arg_len),
                 argv[i], strlen(argv[i]) + 1);
+
+            debug_printf("execv: strlen'd i = %d\n", i);
 
             // copy pointer to string to stack page
             uintptr_t argv_ptr =
@@ -956,15 +962,18 @@ uintptr_t proc::syscall(regstate* regs) {
             memcpy(reinterpret_cast<void*>(stkpg_top - mem_diff + 8 * i),
                 &argv_ptr, 8);
 
+            // update program_name to point into the new pagetable
+            if (i == 0) {
+                program_name = reinterpret_cast<const char*>(argv_ptr);
+            }
+
             arg_len += strlen(argv[i]) + 1;
+
+            debug_printf("execv: strlen'd i = %d 2nd time\n", i);
         }
         // null-terminate argv pointer array
         *reinterpret_cast<void**>(stkpg_top - mem_diff + sz_argv_ptrs - 8) =
             nullptr;
-
-
-
-
 
         // save things clobbered by init_user
         auto old_pt = pagetable_;
@@ -984,18 +993,23 @@ uintptr_t proc::syscall(regstate* regs) {
         assert(vmiter(this, ktext2pa(console)).map(ktext2pa(console),
                                                 PTE_P | PTE_W | PTE_U) >= 0);
 
+        set_pagetable(pagetable_);
+
+        debug_printf("execv: loading program...\n");
+
         // load program
         auto irqs = memfile::lock_.lock();
-        auto load_r = load(program_name);
+        auto load_r = this->load(program_name);
         memfile::lock_.unlock(irqs);
+        debug_printf("execv: loaded\n");
         if (load_r < 0) {
+            set_pagetable(old_pt);
             nuke_pagetable(npt);
             pagetable_ = old_pt;
             *regs_ = old_regs;
             r = load_r;
             break;
         }
-
 
         // set 1st argument to argc
         regs_->reg_rdi = argc;
@@ -1011,9 +1025,21 @@ uintptr_t proc::syscall(regstate* regs) {
 
         nuke_pagetable(old_pt);
 
-        set_pagetable(pagetable_);
         yield_noreturn();
         break; // never reached
+    }
+
+    case SYSCALL_READDISKFILE: {
+        const char* filename = reinterpret_cast<const char*>(regs->reg_rdi);
+        unsigned char* buf = reinterpret_cast<unsigned char*>(regs->reg_rsi);
+        uintptr_t sz = regs->reg_rdx;
+        uintptr_t off = regs->reg_r10;
+
+        if (!sata_disk) {
+            return E_IO;
+        }
+
+        return chickadeefs_read_file_data(filename, buf, sz, off);
     }
 
     default:

@@ -58,6 +58,14 @@ struct __attribute__((aligned(4096))) proc {
 
     void init_user(pid_t pid, x86_64_pagetable* pt);
     void init_kernel(pid_t pid, void (*f)(proc*));
+
+    struct loader {
+        x86_64_pagetable* pagetable_ = nullptr;
+        uintptr_t entry_rip_ = 0;
+        virtual ssize_t get_page(uint8_t** pg, size_t off) = 0;
+        virtual void put_page(uint8_t* pg) = 0;
+    };
+    static int load(loader& ld);
     int load(const char* binary_name);
 
     void exception(regstate* reg);
@@ -74,7 +82,7 @@ struct __attribute__((aligned(4096))) proc {
     inline irqstate lock_pagetable_read();
     inline void unlock_pagetable_read(irqstate& irqs);
  private:
-    int load_segment(const elf_program* ph, const uint8_t* data);
+    static int load_segment(const elf_program& ph, loader& ld);
 };
 
 #include "k-wait.hh"
@@ -406,7 +414,7 @@ void log_vprintf(const char* format, va_list val) __attribute__((noinline));
 void debug_printf_(const char* file, const char* func, int line,
                           const char* format, ...);
 
-#define DEBUG false
+#define DEBUG true
 #include "k-debug.hh"
 
 // log_backtrace

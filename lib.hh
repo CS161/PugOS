@@ -84,6 +84,15 @@ template <typename T> constexpr char printfmt<T*>::spec[];
         uint64_t __n = (uint64_t) (n);                          \
         (typeof(a)) (ROUNDDOWN((uint64_t) (a) + __n - 1, __n)); })
 
+template <typename T>
+inline constexpr T min(T a, T b) {
+    return a < b ? a : b;
+}
+template <typename T>
+inline constexpr T max(T a, T b) {
+    return b < a ? a : b;
+}
+
 // msb(x)
 //    Return index of most significant bit in `x`, plus one.
 //    Returns 0 if `x == 0`.
@@ -130,6 +139,14 @@ inline bool isspace(unsigned char ch) {
 }
 
 
+// Checksums
+
+uint32_t crc32c(uint32_t crc, const void* buf, size_t sz);
+inline uint32_t crc32c(const void* buf, size_t sz) {
+    return crc32c(0, buf, sz);
+}
+
+
 // System call numbers: an application calls `int NUM` to call a system call
 
 #define SYSCALL_GETPID          1
@@ -154,6 +171,7 @@ inline bool isspace(unsigned char ch) {
 #define SYSCALL_EXECV           106
 #define SYSCALL_OPEN            107
 #define SYSCALL_UNLINK          108
+#define SYSCALL_READDISKFILE    109
 
 
 // System call error return values

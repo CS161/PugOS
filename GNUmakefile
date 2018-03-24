@@ -47,6 +47,7 @@ KERNEL_OBJS = $(OBJDIR)/k-exception.ko \
 	$(OBJDIR)/kernel.ko $(OBJDIR)/k-alloc.ko $(OBJDIR)/k-vmiter.ko \
 	$(OBJDIR)/k-init.ko $(OBJDIR)/k-hardware.ko $(OBJDIR)/k-mpspec.ko \
 	$(OBJDIR)/k-devices.ko $(OBJDIR)/k-cpu.ko $(OBJDIR)/k-proc.ko \
+	$(OBJDIR)/crc32c.ko $(OBJDIR)/k-chkfs.ko \
 	$(OBJDIR)/k-memviewer.ko $(OBJDIR)/lib.ko $(OBJDIR)/k-vfs.ko
 
 PROCESS_LIB_OBJS = $(OBJDIR)/lib.o $(OBJDIR)/p-lib.o
@@ -59,6 +60,7 @@ PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-exececho.o \
 	$(OBJDIR)/p-false.o \
 	$(OBJDIR)/p-init.o \
+	$(OBJDIR)/p-readdiskfile.o \
 	$(OBJDIR)/p-sh.o \
 	$(OBJDIR)/p-testeintr.o \
 	$(OBJDIR)/p-testmemfs.o \
@@ -70,7 +72,8 @@ PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-testwaitpid.o \
 	$(OBJDIR)/p-testzombie.o \
 	$(OBJDIR)/p-true.o \
-	$(OBJDIR)/p-wc.o
+	$(OBJDIR)/p-wc.o \
+	$(OBJDIR)/p-wcdiskfile.o
 
 
 INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~' 2>/dev/null) \
@@ -82,6 +85,7 @@ INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~'
 	obj/p-exececho \
 	obj/p-false \
 	obj/p-init \
+	obj/p-readdiskfile \
 	obj/p-sh \
 	obj/p-testeintr \
 	obj/p-testmemfs \
@@ -93,11 +97,20 @@ INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~'
 	obj/p-testwaitpid \
 	obj/p-testzombie \
 	obj/p-true \
-	obj/p-wc
+	obj/p-wc \
+	obj/p-wcdiskfile
 
 
 ifneq ($(strip $(INITFS_CONTENTS)),$(DEP_INITFS_CONTENTS))
 INITFS_BUILDSTAMP := $(shell echo "DEP_INITFS_CONTENTS:=$(INITFS_CONTENTS)" > $(DEPSDIR)/_initfs.d; echo always)
+endif
+
+
+DISKFS_CONTENTS = $(shell find diskfs -type f -not -name '\#*\#' -not -name '*~' 2>/dev/null) \
+	$(INITFS_CONTENTS)
+
+ifneq ($(strip $(DISKFS_CONTENTS)),$(DEP_DISKFS_CONTENTS))
+DISKFS_BUILDSTAMP := $(shell echo "DEP_DISKFS_CONTENTS:=$(DISKFS_CONTENTS)" > $(DEPSDIR)/_diskfs.d; echo always)
 endif
 
 
@@ -106,10 +119,17 @@ ifneq ($(filter run-%,$(MAKECMDGOALS)),)
 ifeq ($(words $(MAKECMDGOALS)),1)
 RUNCMD_LASTWORD := $(lastword $(subst -, ,$(MAKECMDGOALS)))
 ifneq ($(filter obj/p-$(RUNCMD_LASTWORD),$(INITFS_CONTENTS)),)
-CPPFLAGS += -DCHICKADEE_FIRST_PROCESS='"$(RUNCMD_LASTWORD)"'
-$(OBJDIR)/kernel.ko: always
+RUNSUFFIX := $(RUNCMD_LASTWORD)
+CHICKADEE_FIRST_PROCESS := $(RUNCMD_LASTWORD)
+CPPFLAGS += -DCHICKADEE_FIRST_PROCESS='"$(CHICKADEE_FIRST_PROCESS)"'
 endif
 endif
+endif
+
+CHICKADEE_FIRST_PROCESS ?= allocator
+ifneq ($(strip $(CHICKADEE_FIRST_PROCESS)),$(DEP_CHICKADEE_FIRST_PROCESS))
+FIRST_PROCESS_BUILDSTAMP := $(shell echo "DEP_CHICKADEE_FIRST_PROCESS:=$(CHICKADEE_FIRST_PROCESS)" > $(DEPSDIR)/_first_process.d)
+obj/kernel.ko: always
 endif
 
 
@@ -138,14 +158,14 @@ $(OBJDIR)/k-asm.h: kernel.hh build/mkkernelasm.awk $(BUILDSTAMPS)
 	$(call cxxcompile,-dM -E kernel.hh | awk -f build/mkkernelasm.awk | sort > $@,CREATE $@)
 	@if test ! -s $@; then echo '* Error creating $@!' 1>&2; exit 1; fi
 
-$(OBJDIR)/k-initfs.cc: \
-	build/mkinitfs.awk $(INITFS_CONTENTS) $(INITFS_BUILDSTAMP) $(BUILDSTAMPS) GNUmakefile
+$(OBJDIR)/k-initfs.cc: build/mkinitfs.awk \
+	$(INITFS_CONTENTS) $(INITFS_BUILDSTAMP) $(BUILDSTAMPS)
 	$(call run,echo $(INITFS_CONTENTS) | awk -f build/mkinitfs.awk >,CREATE,$@)
 
 $(OBJDIR)/k-devices.ko: $(OBJDIR)/k-initfs.cc
 
 
-# How to make binaries and disk images
+# How to make binaries and the boot sector
 
 $(OBJDIR)/kernel.full: $(KERNEL_OBJS) $(INITFS_CONTENTS) kernel.ld
 	$(call link,-T kernel.ld -o $@ $(KERNEL_OBJS) -b binary $(INITFS_CONTENTS),LINK)
@@ -165,18 +185,38 @@ $(OBJDIR)/bootsector: $(BOOT_OBJS) boot.ld
 	$(call run,$(NM) -n $@.full >$@.sym)
 	$(call run,$(OBJCOPY) -S -O binary -j .text $@.full $@)
 
+
+# How to make host programs for constructing & checking file systems
+
+$(OBJDIR)/%.o: %.cc $(BUILDSTAMPS)
+	$(call run,$(HOSTCXX) $(CPPFLAGS) $(HOSTCXXFLAGS) $(DEPCFLAGS_AT) -c -o $@,HOSTCOMPILE,$<)
+
+$(OBJDIR)/%.o: build/%.cc $(BUILDSTAMPS)
+	$(call run,$(HOSTCXX) $(CPPFLAGS) $(HOSTCXXFLAGS) $(DEPCFLAGS_AT) -c -o $@,HOSTCOMPILE,$<)
+
 $(OBJDIR)/mkchickadeefs: build/mkchickadeefs.cc $(BUILDSTAMPS)
 	$(call run,$(HOSTCXX) $(CPPFLAGS) $(HOSTCXXFLAGS) $(DEPCFLAGS_AT) -o $@,HOSTCOMPILE,$<)
 
-$(OBJDIR)/chickadeefsck: build/chickadeefsck.cc $(BUILDSTAMPS)
-	$(call run,$(HOSTCXX) $(CPPFLAGS) $(HOSTCXXFLAGS) $(DEPCFLAGS_AT) -o $@,HOSTCOMPILE,$<)
+CHICKADEEFSCK_OBJS = $(OBJDIR)/chickadeefsck.o \
+	$(OBJDIR)/journalreplayer.o \
+	$(OBJDIR)/crc32c.o
+$(OBJDIR)/chickadeefsck: $(CHICKADEEFSCK_OBJS) $(BUILDSTAMPS)
+	$(call run,$(HOSTCXX) $(CPPFLAGS) $(HOSTCXXFLAGS) $(DEPCFLAGS_AT) $(CHICKADEEFSCK_OBJS) -o,HOSTLINK,$@)
+
+
+# How to make disk images
 
 # If you change the `-f` argument, also change `boot.cc:KERNEL_START_SECTOR`
 chickadeeboot.img: $(OBJDIR)/mkchickadeefs $(OBJDIR)/bootsector $(OBJDIR)/kernel
 	$(call run,$(OBJDIR)/mkchickadeefs -b 4096 -f 16 -s $(OBJDIR)/bootsector $(OBJDIR)/kernel > $@,CREATE $@)
 
-chickadeefs.img: $(OBJDIR)/mkchickadeefs $(OBJDIR)/bootsector $(OBJDIR)/kernel
-	$(call run,$(OBJDIR)/mkchickadeefs -b 32768 -f 16 -s $(OBJDIR)/bootsector $(OBJDIR)/kernel $(INITFS_CONTENTS) > $@,CREATE $@)
+chickadeefs.img: $(OBJDIR)/mkchickadeefs \
+	$(OBJDIR)/bootsector $(OBJDIR)/kernel $(DISKFS_CONTENTS) \
+	$(DISKFS_BUILDSTAMP)
+	$(call run,$(OBJDIR)/mkchickadeefs -b 32768 -f 16 -s $(OBJDIR)/bootsector $(OBJDIR)/kernel $(DISKFS_CONTENTS) > $@,CREATE $@)
+
+
+# How to run QEMU
 
 QEMUIMG = -M q35 \
         -device piix4-ide,bus=pcie.0,id=piix4-ide \
@@ -185,31 +225,31 @@ QEMUIMG = -M q35 \
 	-drive file=chickadeefs.img,if=none,format=raw,id=maindisk \
 	-device ide-drive,drive=maindisk,bus=ide.0
 
-run-%: run-$(QEMUDISPLAY)
+run: run-$(QEMUDISPLAY)
 	@:
-run-graphic-%: $(QEMUIMAGEFILES) check-qemu
+run-graphic: $(QEMUIMAGEFILES) check-qemu
 	@echo '* Run `gdb -x build/chickadee.gdb` to connect gdb to qemu.' 1>&2
 	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -gdb tcp::12949 $(QEMUIMG),QEMU $<)
-run-console-%: $(QEMUIMAGEFILES) check-qemu
+run-console: $(QEMUIMAGEFILES) check-qemu
 	@echo '* Run `gdb -x build/chickadee.gdb` to connect gdb to qemu.' 1>&2
 	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -curses -gdb tcp::12949 $(QEMUIMG),QEMU $<)
-run-monitor-%: $(QEMUIMAGEFILES) check-qemu
+run-monitor: $(QEMUIMAGEFILES) check-qemu
 	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -monitor stdio $(QEMUIMG),QEMU $<)
-run-gdb-%: run-gdb-$(QEMUDISPLAY)-%
+run-gdb: run-gdb-$(QEMUDISPLAY)
 	@:
-run-gdb-graphic-%: $(QEMUIMAGEFILES) check-qemu
+run-gdb-graphic: $(QEMUIMAGEFILES) check-qemu
 	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -gdb tcp::12949 $(QEMUIMG) &,QEMU $<)
 	$(call run,sleep 0.5; gdb -x build/chickadee.gdb,GDB)
-run-gdb-console-%: $(QEMUIMAGEFILES) check-qemu
+run-gdb-console: $(QEMUIMAGEFILES) check-qemu
 	$(call run,$(QEMU_PRELOAD) $(QEMU) $(QEMUOPT) -curses -gdb tcp::12949 $(QEMUIMG),QEMU $<)
 
-run: run-anything
-run-graphic: run-graphic-anything
-run-console: run-console-anything
-run-monitor: run-monitor-anything
-run-gdb: run-gdb-anything
-run-gdb-graphic: run-gdb-graphic-anything
-run-gdb-console: run-gdb-console-anything
+run-$(RUNSUFFIX): run
+run-graphic-$(RUNSUFFIX): run-graphic
+run-console-$(RUNSUFFIX): run-console
+run-monitor-$(RUNSUFFIX): run-monitor
+run-gdb-$(RUNSUFFIX): run-gdb
+run-gdb-graphic-$(RUNSUFFIX): run-gdb-graphic
+run-gdb-console-$(RUNSUFFIX): run-gdb-console
 
 # Kill all my qemus
 kill:

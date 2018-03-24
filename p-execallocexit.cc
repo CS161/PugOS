@@ -3,6 +3,8 @@
 void process_main() {
     sys_kdisplay(KDISPLAY_NONE);
 
+    sys_log_printf("execallocexit launched\n");
+
     for (int i = 5; i > 0; --i) {
         char buf[80];
         int n = snprintf(buf, sizeof(buf),
