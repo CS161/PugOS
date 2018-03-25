@@ -215,6 +215,10 @@ inline void sys_log_printf(const char* format, ...) {
     va_end(val);
 }
 
+inline unsigned long sys_getticks() {
+    return syscall0(SYSCALL_GETTICKS);
+}
+
 // sys_execv(program_name, argv, argc)
 //    Replace this process image with a new image running `program_name`
 //    with `argc` arguments, stored in argument array `argv`. Returns

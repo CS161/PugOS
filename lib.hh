@@ -162,6 +162,7 @@ inline uint32_t crc32c(const void* buf, size_t sz) {
 #define SYSCALL_WAITPID         11
 #define SYSCALL_COMMIT_SEPPUKU  44
 #define SYSCALL_LOG_PRINTF      69
+#define SYSCALL_GETTICKS       77
 #define SYSCALL_KDISPLAY        100
 #define SYSCALL_READ            101
 #define SYSCALL_WRITE           102

@@ -2,6 +2,7 @@
 #define CHICKADEE_K_CHKFS_HH
 #include "kernel.hh"
 #include "chickadeefs.hh"
+#include "k-list.hh"
 #include "k-lock.hh"
 #include "k-wait.hh"
 
@@ -17,6 +18,8 @@ struct bufentry {
     unsigned ref_ = 0;               // refcount: protects entry
     unsigned flags_ = 0;             // flags
     void* buf_ = nullptr;            // memory buffer used for entry
+
+    list_links entry_link_;
 
     enum {
         f_loaded = 1, f_loading = 2, f_dirty = 4
@@ -35,6 +38,7 @@ struct bufcache {
     spinlock lock_;                  // protects all entries' bn_ and ref_
     wait_queue read_wq_;
     bufentry e_[ne];
+    list<bufentry, &bufentry::entry_link_> e_list_;
 
 
     static inline bufcache& get();

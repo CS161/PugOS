@@ -4,6 +4,7 @@
 bufcache bufcache::bc;
 
 bufcache::bufcache() {
+    get_disk_block(0);
 }
 
 
@@ -23,6 +24,7 @@ void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
     size_t i;
     for (i = 0; i != ne; ++i) {
         if (e_[i].bn_ == bn) {
+            e_list_.erase(&e_[i]);
             break;
         }
     }
@@ -40,8 +42,11 @@ void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
         e_[i].bn_ = bn;
     }
 
+    e_list_.push_back(&e_[i]);
+
     // mark reference
-    ++e_[i].ref_;
+    if (bn != 0)
+        ++e_[i].ref_;
 
     // switch lock to entry lock
     e_[i].lock_.lock_noirq();
@@ -103,10 +108,13 @@ void bufcache::put_block(void* buf) {
     assert(i != ne);
 
     // drop reference
-    --e_[i].ref_;
-    if (e_[i].ref_ == 0) {
-        kfree(e_[i].buf_);
-        e_[i].clear();
+    if (e_[i].bn_ != 0) {
+        --e_[i].ref_;
+        if (e_[i].ref_ == 0) {
+            e_list_.erase(&e_[i]);
+            kfree(e_[i].buf_);
+            e_[i].clear();
+        }
     }
 
     lock_.unlock(irqs);

@@ -10,6 +10,8 @@ void process_main(int argc, char** argv) {
         filename = argv[1];
     }
 
+    unsigned long start = sys_getticks();
+
     size_t off = 0;
     while (1) {
         ssize_t n = sys_readdiskfile(filename, buf, sizeof(buf), off);
@@ -24,6 +26,9 @@ void process_main(int argc, char** argv) {
         sys_write(1, buf, n);
         off += n;
     }
+
+    sys_log_printf("p-readdiskfile runtime: ~%d ms\n",
+                   (sys_getticks() - start) * 10);
 
     sys_exit(0);
 }

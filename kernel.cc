@@ -643,6 +643,11 @@ uintptr_t proc::syscall(regstate* regs) {
         break;
     }
 
+    case SYSCALL_GETTICKS: {
+        r = ticks;
+        break;
+    }
+
     case SYSCALL_READ:
     case SYSCALL_WRITE: {
         int fd = regs->reg_rdi;
