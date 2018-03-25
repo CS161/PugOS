@@ -51,7 +51,7 @@ void init_hardware() {
     cpus[0].enable_irq(IRQ_KEYBOARD);
 
     // initialize SATA drive
-    /* sata_disk = ahcistate::find(); */
+    sata_disk = ahcistate::find();
     if (sata_disk && sata_disk->irq_ > 0) {
         cpus[ncpu - 1].enable_irq(sata_disk->irq_);
     }
