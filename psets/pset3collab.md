@@ -5,6 +5,8 @@ Collaborators
 -------------
 (Your team members, if any, and other students you worked with)
 
+Partner: Max Levenson
+
 Citations
 ---------
 (Other sources consulted)

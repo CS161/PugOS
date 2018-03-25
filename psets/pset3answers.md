@@ -6,54 +6,48 @@ Leave your name out of this file. Put collaboration notes and credit in
 Answers to written questions
 ----------------------------
 
-## Changes
+## Changes from initial vfs design
 
-deref in file struct
+#### VFS OBJS
+- added bbuffer - bounded buffer for pipes
 
-void* -> uintptr_t in read/write params
+#### VNODES
+- vnode_keyboard and vnode_console are now merged into vnode_kbc
+- added vnode_memfile, vnode_pipe
+- removed unused virtual functions (i.e. everything but read and write)
+- removed sz_
+- linked list of open vnodes moved to future directions (wasn't relevant for this pset)
+- read and write take a reference to the offset now so they can update it on the file struct
+- read and write take uintptr_t instead of void*
+- added generic filename to pipe and keyboard/console vnodes
 
-bb * on vnode
+#### FDTABLE
+- global length of fdtable stored in k-vfs.hh not kernel.hh
+- on fdtable initialization in process_setup, fds 0, 1, and 2 point to vnode_kbc
 
-keyboard and console vnodes are actually 1 vnode
+#### FILE
+- added stream type (used for kbc)
+- added deref function
 
-added a filename on keyboard/console and pipe vnodes (why? who knows)
+#### FUNCTIONALITY
+- pipe is now specifically for pipes, with a new type stream for generic non-seekable files (like the keyboard/console)
 
-sys read and write throw ebadf not eperm on read/write bad perms
+#### FILE MODES
+- readable_, writeable_ no longer const
 
-offset ref on file, passed into vnode functions
+#### SYNCH
+- off_ controlled excelusively by vnode implementation, synchronized managed by vnode virtual functions
+- vnode lock_ only guards refs_
+- block on reads when bbuffer is empty and writes when bbuffer is full
+- added a memfs lock memfile::lock_ that protects the whole initfs array
+- the added bounded buffer implementation has a lock that guards its data
 
+#### FUTURE DIRECTIONS
+- global list for vnodes for a file system
+- removed section on not freeing vnodes when refcount hits 0
 
-
-
-
-
-VFS OBJS
-added bbuffer - bounded buffer for pipes
-
-VNODES
-vnode_keyboard and vnode_console are now merged into vnode_kbc
-added vnode_memfile, vnode_pipe
-removed unused virtual functions (i.e. everything but read and write)
-removed sz_
-linked list of open vnodes moved to future directions
-
-FDTABLE
-global length of fdtable stored in k-vfs.hh not kernel.hh
-on fdtable initialization in process_setup, fds 0, 1, and 2 point to vnode_kbc
-
-FILE
-added stream type (used for kbc)
-added deref function
-
-FUNCTIONALITY
-pipe is now specifically for pipes, with a new type stream for generic non-seekable files (like the keyboard/console)
-
-FILE MODES
-readable_, writeable_ no longer const
-
-SYNCH
-off_ controlled excelusively by vnode implementation
-vnode lock_ only guards refs_
+#### CONCERNS
+- added note about how it seems a bit jank to store the bounded buffer on the base vnode class
 
 
 Grading notes
