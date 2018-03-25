@@ -361,7 +361,7 @@ bool validate_memory(T* addr, size_t sz = 0, int perms = 0) {
 
 int check_string_termination(const char* str, int max_len) {
     if (!str)
-        return E_INVAL;
+        return E_FAULT;
     for (int i = 0; i < max_len; i++) {
         if (!validate_memory(&str[i], 1, PTE_P | PTE_U))
             return E_FAULT;
