@@ -5,6 +5,7 @@ bufcache bufcache::bc;
 
 bufcache::bufcache() {
     get_disk_block(0);
+    e_[0].ref_ = 1;
 }
 
 
@@ -35,9 +36,22 @@ void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
         }
         if (i == ne) {
             // cache full!
+            for (auto b = e_list_.front(); b; b = e_list_.next(b)) {
+                if (b->ref_ == 0) {
+                    i = (reinterpret_cast<uintptr_t>(b) -
+                         reinterpret_cast<uintptr_t>(&e_)) / sizeof(bufentry);
+                    e_list_.erase(b);
+                    b->clear();
+                    kfree(b->buf_);
+                    break;
+                }
+            }
+
             lock_.unlock(irqs);
-            log_printf("bufcache: no room for block %u\n", bn);
-            return nullptr;
+            if (i == ne) {
+                log_printf("bufcache: no room for block %u\n", bn);
+                return nullptr;
+            }
         }
         e_[i].bn_ = bn;
     }
@@ -110,11 +124,11 @@ void bufcache::put_block(void* buf) {
     // drop reference
     if (e_[i].bn_ != 0) {
         --e_[i].ref_;
-        if (e_[i].ref_ == 0) {
-            e_list_.erase(&e_[i]);
-            kfree(e_[i].buf_);
-            e_[i].clear();
-        }
+        // if (e_[i].ref_ == 0) {
+        //     e_list_.erase(&e_[i]);
+        //     kfree(e_[i].buf_);
+        //     e_[i].clear();
+        // }
     }
 
     lock_.unlock(irqs);
