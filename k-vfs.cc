@@ -126,9 +126,9 @@ size_t vnode_pipe::read(uintptr_t buf, size_t sz, size_t& off) {
 	        }, bb_.lock_, irqs);
 	}
 
-    if (bb_.write_closed_) {
-    	bb_.lock_.unlock(irqs);
-    	return 0;
+    if (bb_.write_closed_ && bb_.len_ == 0) {
+        bb_.lock_.unlock(irqs);
+        return 0; // EOF
     }
 
     while (input_pos < sz && bb_.len_ > 0) {
