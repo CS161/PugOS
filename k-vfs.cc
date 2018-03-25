@@ -28,17 +28,17 @@ file::~file() {
 	--vnode_->refs_;
 	assert(vnode_->refs_ >= 0);
 
-	if (type_ == file::pipe && bb_) {
-		bb_->lock_.lock_noirq();
+	if (type_ == file::pipe && vnode_->bb_) {
+		vnode_->bb_->lock_.lock_noirq();
 		if (readable_) {
-			bb_->read_closed_ = true;
-			bb_->nonfull_wq_.wake_all();
+			vnode_->bb_->read_closed_ = true;
+			vnode_->bb_->nonfull_wq_.wake_all();
 		}
 		if (writeable_) {
-			bb_->write_closed_ = true;
-			bb_->nonempty_wq_.wake_all();
+			vnode_->bb_->write_closed_ = true;
+			vnode_->bb_->nonempty_wq_.wake_all();
 		}
-		bb_->lock_.unlock_noirq();
+		vnode_->bb_->lock_.unlock_noirq();
 	}
 
 	auto refs = vnode_->refs_;
@@ -116,40 +116,40 @@ size_t vnode_pipe::read(uintptr_t buf, size_t sz, size_t& off) {
     size_t input_pos = 0;
     char* input_buf = reinterpret_cast<char*>(buf);
 
-    auto irqs = bb_.lock_.lock();
-    assert(!bb_.read_closed_);
+    auto irqs = bb_->lock_.lock();
+    assert(!bb_->read_closed_);
 
-    if (bb_.len_ == 0) {
+    if (bb_->len_ == 0) {
 	    // block until data is available
-	    waiter(current()).block_until(bb_.nonempty_wq_, [&] () {
-	            return sz == 0 || bb_.len_ > 0 || bb_.write_closed_;
-	        }, bb_.lock_, irqs);
+	    waiter(current()).block_until(bb_->nonempty_wq_, [&] () {
+	            return sz == 0 || bb_->len_ > 0 || bb_->write_closed_;
+	        }, bb_->lock_, irqs);
 	}
 
-    if (bb_.write_closed_ && bb_.len_ == 0) {
-        bb_.lock_.unlock(irqs);
+    if (bb_->write_closed_ && bb_->len_ == 0) {
+        bb_->lock_.unlock(irqs);
         return 0; // EOF
     }
 
-    while (input_pos < sz && bb_.len_ > 0) {
+    while (input_pos < sz && bb_->len_ > 0) {
         size_t ncopy = sz - input_pos;
-        if (ncopy > BBUFFER_SIZE - bb_.pos_) {
-            ncopy = BBUFFER_SIZE - bb_.pos_;
+        if (ncopy > BBUFFER_SIZE - bb_->pos_) {
+            ncopy = BBUFFER_SIZE - bb_->pos_;
         }
-        if (ncopy > bb_.len_) {
-            ncopy = bb_.len_;
+        if (ncopy > bb_->len_) {
+            ncopy = bb_->len_;
         }
-        memcpy(&input_buf[input_pos], &bb_.buf_[bb_.pos_], ncopy);
-        bb_.pos_ = (bb_.pos_ + ncopy) % BBUFFER_SIZE;
-        bb_.len_ -= ncopy;
+        memcpy(&input_buf[input_pos], &bb_->buf_[bb_->pos_], ncopy);
+        bb_->pos_ = (bb_->pos_ + ncopy) % BBUFFER_SIZE;
+        bb_->len_ -= ncopy;
         input_pos += ncopy;
     }
-    bb_.lock_.unlock(irqs);
+    bb_->lock_.unlock(irqs);
 
     if (input_pos == 0 && sz > 0) {
     	return -1;
     } else {
-    	bb_.nonfull_wq_.wake_all();
+    	bb_->nonfull_wq_.wake_all();
     	return input_pos;
     }
 }
@@ -160,40 +160,40 @@ size_t vnode_pipe::write(uintptr_t buf, size_t sz, size_t& off) {
     size_t input_pos = 0;
     const char* input_buf = reinterpret_cast<const char*>(buf);
 
-    auto irqs = bb_.lock_.lock();
-    assert(!bb_.write_closed_);
+    auto irqs = bb_->lock_.lock();
+    assert(!bb_->write_closed_);
 
-    if (bb_.len_ == BBUFFER_SIZE) {
+    if (bb_->len_ == BBUFFER_SIZE) {
 	    // block until data is available
-	    waiter(current()).block_until(bb_.nonfull_wq_, [&] () {
-	            return sz == 0 || bb_.len_ < BBUFFER_SIZE || bb_.read_closed_;
-	        }, bb_.lock_, irqs);
+	    waiter(current()).block_until(bb_->nonfull_wq_, [&] () {
+	            return sz == 0 || bb_->len_ < BBUFFER_SIZE || bb_->read_closed_;
+	        }, bb_->lock_, irqs);
 	}
 
-    if (bb_.read_closed_) {
-    	bb_.lock_.unlock(irqs);
+    if (bb_->read_closed_) {
+    	bb_->lock_.unlock(irqs);
     	return E_PIPE;
     }
 
-    while (input_pos < sz && bb_.len_ < BBUFFER_SIZE) {
-        size_t bb_index = (bb_.pos_ + bb_.len_) % BBUFFER_SIZE;
+    while (input_pos < sz && bb_->len_ < BBUFFER_SIZE) {
+        size_t bb_index = (bb_->pos_ + bb_->len_) % BBUFFER_SIZE;
         size_t ncopy = sz - input_pos;
         if (ncopy > BBUFFER_SIZE - bb_index) {
             ncopy = BBUFFER_SIZE - bb_index;
         }
-        if (ncopy > BBUFFER_SIZE - bb_.len_) {
-            ncopy = BBUFFER_SIZE - bb_.len_;
+        if (ncopy > BBUFFER_SIZE - bb_->len_) {
+            ncopy = BBUFFER_SIZE - bb_->len_;
         }
-        memcpy(&bb_.buf_[bb_index], &input_buf[input_pos], ncopy);
-        bb_.len_ += ncopy;
+        memcpy(&bb_->buf_[bb_index], &input_buf[input_pos], ncopy);
+        bb_->len_ += ncopy;
         input_pos += ncopy;
     }
-    bb_.lock_.unlock(irqs);
+    bb_->lock_.unlock(irqs);
 
     if (input_pos == 0 && sz > 0) {
         return -1;
     } else {
-    	bb_.nonempty_wq_.wake_all();
+    	bb_->nonempty_wq_.wake_all();
         return input_pos;
     }
 }

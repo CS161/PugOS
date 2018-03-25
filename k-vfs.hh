@@ -36,7 +36,6 @@ struct vnode {
     // lock_ guards everything below it
     spinlock lock_;
     int refs_;
-    size_t sz_;
 
     virtual size_t read(uintptr_t buf, size_t sz, size_t& off) {
         return E_PERM;
@@ -44,38 +43,27 @@ struct vnode {
     virtual size_t write(uintptr_t buf, size_t sz, size_t& off) {
         return E_PERM;
     };
-    // virtual int link() { return E_PERM; };
-    // virtual int unlink() { return E_PERM; };
-    // virtual int symlink() { return E_PERM; };
-    // virtual int creat() { return E_PERM; };
-    // virtual int mkdir() { return E_PERM; };
-    // virtual int rmdir() { return E_PERM; };
-    // virtual int rename() { return E_PERM; };
 
-    vnode() : bb_(nullptr), refs_(1), sz_(0) { };
+    vnode() : bb_(nullptr), refs_(1) { };
     ~vnode();
 };
 
 
 struct file {
     enum type_t {
-        normie, pipe, directory
-    };
+        normie, pipe, directory, stream
+    } type_;
 
-    type_t type_;
     bool readable_;
     bool writeable_;
     vnode* vnode_;
-
-    // only for pipes - will always point to vnode_pipe->bb_
-    bbuffer* bb_;
     
     // lock_ guards everything below it
     spinlock lock_;
     int refs_; // for threading later
     void deref();
 
-    file() : bb_(nullptr), refs_(1), off_(0) { };
+    file() : refs_(1), off_(0) { };
     ~file();
 
     size_t off_;
@@ -108,13 +96,6 @@ struct vnode_pipe : vnode {
     const char* filename_ = "pipe";
     virtual size_t read(uintptr_t buf, size_t sz, size_t& off) override;
     virtual size_t write(uintptr_t buf, size_t sz, size_t& off) override;
-
-    vnode_pipe(file* rfile, file* wfile) {
-        rfile->bb_ = wfile->bb_ = &this->bb_;
-    };
-
-  private:
-    bbuffer bb_;
 };
 
 

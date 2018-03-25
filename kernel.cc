@@ -80,7 +80,7 @@ void process_setup(pid_t pid, const char* name) {
     file* f = p->fdtable_->fds_[0] = p->fdtable_->fds_[1] =
               p->fdtable_->fds_[2] = knew<file>();
     assert(f);
-    f->type_ = file::pipe;
+    f->type_ = file::stream;
     f->readable_ = true;
     f->writeable_ = true;
     f->vnode_ = knew<vnode_kbc>();
@@ -873,12 +873,14 @@ uintptr_t proc::syscall(regstate* regs) {
 
         auto rfile = fdtable_->fds_[rfd] = knew<file>();
         auto wfile = fdtable_->fds_[wfd] = knew<file>();
-        auto pipe_vnode = knew<vnode_pipe>(rfile, wfile);
-        if (!rfile || !wfile || !pipe_vnode) {
+        auto pipe_vnode = knew<vnode_pipe>();
+        auto bb = knew<bbuffer>();
+        if (!rfile || !wfile || !pipe_vnode || !bb) {
             fdtable_->fds_[rfd] = fdtable_->fds_[wfd] = nullptr;
             kdelete(rfile);
             kdelete(wfile);
             kdelete(pipe_vnode);
+            kdelete(bb);
             fdtable_->lock_.unlock(irqs);
             r = E_NOMEM;
             break;
@@ -889,6 +891,7 @@ uintptr_t proc::syscall(regstate* regs) {
         rfile->writeable_ = wfile->readable_ = false;
         rfile->vnode_ = wfile ->vnode_ = pipe_vnode;
         pipe_vnode->refs_ = 2;
+        pipe_vnode->bb_ = bb;
 
         fdtable_->lock_.unlock(irqs);
 
