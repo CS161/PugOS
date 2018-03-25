@@ -360,6 +360,8 @@ bool validate_memory(T* addr, size_t sz = 0, int perms = 0) {
 //    or the length of the string if it does.
 
 int check_string_termination(const char* str, int max_len) {
+    if (!str)
+        return E_INVAL;
     for (int i = 0; i < max_len; i++) {
         if (!validate_memory(&str[i], 1, PTE_P | PTE_U))
             return E_FAULT;
@@ -605,6 +607,7 @@ uintptr_t proc::syscall(regstate* regs) {
                 if (to_reap || options == W_NOHANG)
                     break;
                 
+                debug_printf("[%d] sys_waitpid blocking\n", pid_);
                 w.block();
             }
             w.clear();
@@ -908,7 +911,34 @@ uintptr_t proc::syscall(regstate* regs) {
         debug_printf("[%d] sys_execv '%s' argc = %d\n",
             pid_, program_name, argc);
 
-        // TODO: validate args
+        // validate args
+        if (argc < 1) {
+            r = E_INVAL;
+            break;
+        } else if (!validate_memory(argv, (argc + 1) * 8, PTE_P | PTE_U)) {
+            r = E_FAULT;
+            break;
+        } else if (!argv[0]) {  // need a real string in pos 0
+            r = E_INVAL;
+            break;
+        }
+        for(unsigned i = 0; i < argc + 1; i++) {
+            // make sure argv is null-terminated
+            if (i == argc) {
+                if (argv[i] != nullptr) {
+                    r = E_INVAL;
+                    break;
+                }
+            } else {
+                int r_cst =
+                    check_string_termination(argv[i], memfile::namesize);
+                if (r_cst < 0) {
+                    r = r_cst;
+                    break;
+                }
+            }
+        }
+
 
         // allocate all the memory
         auto npt = kalloc_pagetable();
