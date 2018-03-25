@@ -822,7 +822,7 @@ uintptr_t proc::syscall(regstate* regs) {
                 memfile::lock_.unlock(irqs);
             }
             if (fd == -1)
-                r = E_MFILE;
+                r = E_NFILE;
             else
                 r = E_NOMEM;
             break;
@@ -864,29 +864,26 @@ uintptr_t proc::syscall(regstate* regs) {
         // not enough open fds
         if (rfd == (uintptr_t) -1 || wfd == (uintptr_t) -1) {
             fdtable_->lock_.unlock(irqs);
-            r = -1; // FIXME: RETURN CORRECT ERROR CODE
+            r = E_NFILE;
             break;
         }
 
         auto rfile = fdtable_->fds_[rfd] = knew<file>();
         auto wfile = fdtable_->fds_[wfd] = knew<file>();
-        auto pipe_vnode = knew<vnode_pipe>();
-        auto bb = knew<bbuffer>();
-        if (!rfile || !wfile || !pipe_vnode || !bb) {
+        auto pipe_vnode = knew<vnode_pipe>(rfile, wfile);
+        if (!rfile || !wfile || !pipe_vnode) {
             fdtable_->fds_[rfd] = fdtable_->fds_[wfd] = nullptr;
             kdelete(rfile);
             kdelete(wfile);
             kdelete(pipe_vnode);
-            kdelete(bb);
             fdtable_->lock_.unlock(irqs);
-            r = -1; // FIXME: RETURN CORRECT ERROR CODE
+            r = E_NOMEM;
             break;
         }
 
         rfile->type_ = wfile->type_ = file::pipe;
         rfile->readable_ = wfile->writeable_ = true;
         rfile->writeable_ = wfile->readable_ = false;
-        pipe_vnode->bb_ = bb;
         rfile->vnode_ = wfile ->vnode_ = pipe_vnode;
         pipe_vnode->refs_ = 2;
 

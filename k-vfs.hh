@@ -66,19 +66,19 @@ struct file {
     bool readable_;
     bool writeable_;
     vnode* vnode_;
+
+    // only for pipes - will always point to vnode_pipe->bb_
+    bbuffer* bb_;
     
     // lock_ guards everything below it
     spinlock lock_;
     int refs_; // for threading later
     void deref();
 
-    file() : refs_(1), off_internal_(0) { };
+    file() : bb_(nullptr), refs_(1), off_(0) { };
     ~file();
 
-    size_t &off_ = off_internal_;
-
-  private:
-    size_t off_internal_;
+    size_t off_;
 };
 
 
@@ -108,6 +108,13 @@ struct vnode_pipe : vnode {
     const char* filename_ = "pipe";
     virtual size_t read(uintptr_t buf, size_t sz, size_t& off) override;
     virtual size_t write(uintptr_t buf, size_t sz, size_t& off) override;
+
+    vnode_pipe(file* rfile, file* wfile) {
+        rfile->bb_ = wfile->bb_ = &this->bb_;
+    };
+
+  private:
+    bbuffer bb_;
 };
 
 
