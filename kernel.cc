@@ -920,15 +920,11 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
-        debug_printf("execv: kalloc'd\n");
-
         // get the total length of the argv array
         size_t argv_len = 0;
         for (size_t i = 0; i < argc; i++) {
             argv_len += strlen(argv[i]) + 1;
         }
-
-        debug_printf("execv: strlen'd\n");
 
         // get the amount of memory for the ptrs to strings
         size_t sz_argv_ptrs = 8 * (argc + 1);
@@ -944,14 +940,10 @@ uintptr_t proc::syscall(regstate* regs) {
         auto stkpg_top = reinterpret_cast<uintptr_t>(stkpg) + PAGESIZE;
         size_t arg_len = 0;
         for (size_t i = 0; i < argc; i++) {
-            debug_printf("execv: strlen'ing i = %d\n", i);
-
             // copy string to stack page
             memcpy(reinterpret_cast<void*>(
                     stkpg_top - mem_diff + sz_argv_ptrs + arg_len),
                 argv[i], strlen(argv[i]) + 1);
-
-            debug_printf("execv: strlen'd i = %d\n", i);
 
             // copy pointer to string to stack page
             uintptr_t argv_ptr =
@@ -965,8 +957,6 @@ uintptr_t proc::syscall(regstate* regs) {
             }
 
             arg_len += strlen(argv[i]) + 1;
-
-            debug_printf("execv: strlen'd i = %d 2nd time\n", i);
         }
         // null-terminate argv pointer array
         *reinterpret_cast<void**>(stkpg_top - mem_diff + sz_argv_ptrs - 8) =
@@ -992,13 +982,10 @@ uintptr_t proc::syscall(regstate* regs) {
 
         set_pagetable(pagetable_);
 
-        debug_printf("execv: loading program...\n");
-
         // load program
         auto irqs = memfile::lock_.lock();
         auto load_r = this->load(program_name);
         memfile::lock_.unlock(irqs);
-        debug_printf("execv: loaded\n");
         if (load_r < 0) {
             set_pagetable(old_pt);
             nuke_pagetable(npt);
