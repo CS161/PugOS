@@ -49,6 +49,8 @@ void process_main(int argc, char** argv) {
     size_t totals[3] = {0, 0, 0};
     unsigned nfiles = 0;
 
+    unsigned long start = sys_getticks();
+
     while (argno < argc) {
         size_t counts[3] = {0, 0, 0};
         bool inword = false;
@@ -88,6 +90,9 @@ void process_main(int argc, char** argv) {
         ssize_t w = sys_write(1, buf, n);
         assert(w == n);
     }
+
+    sys_log_printf("p-wcdiskfile runtime: ~%d ms\n",
+                   (sys_getticks() - start) * 10);
 
     sys_exit(0);
 }

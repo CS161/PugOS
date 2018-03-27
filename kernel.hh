@@ -477,7 +477,7 @@ inline bool proc::contains(uintptr_t addr) const {
 //    Unblocks a process and re-enqueues it on its cpu
 inline void proc::wake() {
     auto irqs = cpus[cpu_].runq_lock_.lock();
-    if (state_ == blocked && resumable()) {
+    if (state_ == blocked) {
         state_ = runnable;
         cpus[cpu_].enqueue(this);
     }
