@@ -47,8 +47,8 @@ void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
                 }
             }
 
-            lock_.unlock(irqs);
             if (i == ne) {
+                lock_.unlock(irqs);
                 log_printf("bufcache: no room for block %u\n", bn);
                 return nullptr;
             }

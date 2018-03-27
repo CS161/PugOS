@@ -56,6 +56,7 @@ void process_main(int argc, char** argv) {
         bool inword = false;
         size_t off = 0;
         while (1) {
+            // sys_log_printf("[wcdiskfile] calling sys_readdiskfile\n");
             ssize_t n = sys_readdiskfile(argv[argno], buf, sizeof(buf), off);
             if (n == 0 || (n < 0 && n != E_AGAIN)) {
                 break;
@@ -75,6 +76,7 @@ void process_main(int argc, char** argv) {
 
         int n = unparse_counts(buf, sizeof(buf), mode, counts,
                                argno < argc ? argv[argno] : "");
+        // sys_log_printf("[wcdiskfile] calling sys_write\n");
         ssize_t w = sys_write(1, buf, n);
         assert(w == n);
 
@@ -87,6 +89,7 @@ void process_main(int argc, char** argv) {
 
     if (nfiles > 1) {
         int n = unparse_counts(buf, sizeof(buf), mode, totals, "total");
+        // sys_log_printf("[wcdiskfile] calling sys_write\n");
         ssize_t w = sys_write(1, buf, n);
         assert(w == n);
     }
