@@ -2,12 +2,16 @@
 #include "lib.hh"
 #include "k-apic.hh"
 #include "k-devices.hh"
+#include "elf.h"
 
+// symtab: reference to kernel symbol table; useful for debugging.
+// The `mkchickadeesymtab` function fills this structure in.
+elf_symtabref symtab = {
+    reinterpret_cast<elf_symbol*>(0xFFFFFFFF81000000), 0, nullptr, 0
+};
+
+// sata_disk: pointer to the first SATA disk found
 ahcistate* sata_disk;
-
-// k-hardware.c
-//
-//    Grody functions for interacting with x86 hardware.
 
 
 // init_hardware
@@ -30,7 +34,12 @@ void init_hardware() {
     init_interrupts();
 
     // call C++ constructors for global objects
+    // (NB none of these constructors may allocate memory)
     init_constructors();
+
+    // initialize this CPU
+    ncpu = 1;
+    cpus[0].init();
 
     // initialize the `physical_ranges` object that tracks
     // kernel and reserved physical memory
@@ -40,12 +49,13 @@ void init_hardware() {
     init_kalloc();
     test_kalloc();
 
-    // initialize this CPU
-    ncpu = 1;
-    cpus[0].init();
-
     // initialize other CPUs
     init_other_processors();
+
+#if HAVE_SANITIZERS
+    // after CPUs initialize, enable address sanitization
+    enable_asan();
+#endif
 
     // enable interrupts
     cpus[0].enable_irq(IRQ_KEYBOARD);
@@ -194,8 +204,8 @@ void init_physical_ranges() {
     // 0 page is reserved (because nullptr)
     physical_ranges.set(0, PAGESIZE, mem_reserved);
     // I/O memory is reserved (except the console is `mem_console`)
-    physical_ranges.set(0xA0000UL, 0x100000UL, mem_reserved);
-    physical_ranges.set(0xC0000000UL, 0x100000000UL, mem_reserved);
+    physical_ranges.set(PA_IOLOWMIN, PA_IOLOWEND, mem_reserved);
+    physical_ranges.set(PA_IOHIGHMIN, PA_IOHIGHEND, mem_reserved);
     physical_ranges.set(ktext2pa(console), ktext2pa(console) + PAGESIZE,
                         mem_console);
     // kernel text and data is owned by the kernel
@@ -207,8 +217,18 @@ void init_physical_ranges() {
     physical_ranges.set(ROUNDDOWN(ktext2pa(_kernel_start), PAGESIZE),
                         ROUNDUP(ktext2pa(_kernel_end), PAGESIZE),
                         mem_kernel);
-    // `physical_ranges` should never change after the initialization process
-    // completes.
+    // reserve memory for debugging facilities
+    if (symtab.size) {
+        auto sympa = ktext2pa(symtab.sym);
+        physical_ranges.set(ROUNDDOWN(sympa, PAGESIZE),
+                            ROUNDUP(sympa + symtab.size, PAGESIZE),
+                            mem_kernel);
+    }
+#if HAVE_SANITIZERS
+    init_sanitizers();
+#endif
+
+    // `physical_ranges` is constant after this point.
 }
 
 

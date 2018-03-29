@@ -27,6 +27,9 @@ struct __attribute__((aligned(4096))) proc {
     pid_t pid_;                        // process ID
     regstate* regs_;                   // process's current registers
     yieldstate* yields_;               // process's current yield state
+#if HAVE_SANITIZERS
+    int sanitizer_status_ = 0;
+#endif
 
     list_links runq_link_;             // for cpu run queue
     list_links child_link_;            // for reparenting
@@ -95,7 +98,7 @@ extern spinlock ptable_lock;
 extern int canary_value;
 
 // allocate a new `proc` and call its constructor
-proc* kalloc_proc();
+proc* kalloc_proc() __attribute__((malloc));
 
 const char* state_string(const proc* p);
 
@@ -121,7 +124,10 @@ struct __attribute__((aligned(4096))) cpustate {
 
     int canary_;
 
-    cpustate() = default;
+
+    inline cpustate()
+        : self_(this), current_(nullptr) {
+    }
     NO_COPY_OR_ASSIGN(cpustate);
 
     inline bool contains(uintptr_t addr) const;
@@ -295,12 +301,12 @@ inline T read_unaligned_pa(uint64_t pa) {
 // kallocpage
 //    Allocate and return a page. Returns `nullptr` on failure.
 //    Returns a high canonical address.
-x86_64_page* kallocpage();
+x86_64_page* kallocpage() __attribute__((malloc));
 
 // kalloc(sz)
 //    Allocate and return a pointer to at least `sz` contiguous bytes
 //    of memory. Returns `nullptr` if `sz == 0` or on failure.
-void* kalloc(size_t sz);
+void* kalloc(size_t sz) __attribute__((malloc));
 
 // kfree(ptr)
 //    Free a pointer previously returned by `kalloc`, `kallocpage`, or
@@ -420,6 +426,19 @@ void debug_printf_(const char* file, const char* func, int line,
 // log_backtrace
 //    Print a backtrace to the host's `log.txt` file.
 void log_backtrace(const char* prefix = "");
+
+
+#if HAVE_SANITIZERS
+// sanitizer functions
+void init_sanitizers();
+void disable_asan();
+void enable_asan();
+void asan_mark_memory(unsigned long pa, size_t sz, bool poisoned);
+#else
+inline void disable_asan() {}
+inline void enable_asan() {}
+inline void asan_mark_memory(unsigned long, size_t, bool) {}
+#endif
 
 
 // `panicking == true` iff some CPU has panicked

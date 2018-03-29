@@ -3,6 +3,8 @@
 #include "k-devices.hh"
 #include "k-pci.hh"
 #include "k-vmiter.hh"
+#include "elf.h"
+
 
 // k-hardware.cc
 //
@@ -167,6 +169,40 @@ void log_printf(const char* format, ...) {
 }
 
 
+// lookup_symbol(addr, name, start)
+//    Use the debugging symbol table to look up `addr`. Return the
+//    corresponding symbol name (usually a function name) in `*name`
+//    and the first address in that function in `*start`.
+
+__no_asan
+bool lookup_symbol(uintptr_t addr, const char** name, uintptr_t* start) {
+    extern elf_symtabref symtab;
+    size_t l = 0;
+    size_t r = symtab.nsym;
+    while (l < r) {
+        size_t m = l + ((r - l) >> 1);
+        auto& sym = symtab.sym[m];
+        if (sym.st_value <= addr
+            && (sym.st_size != 0
+                ? addr < sym.st_value + sym.st_size
+                : m + 1 == symtab.nsym || addr < (&sym)[1].st_value)) {
+            if (name) {
+                *name = symtab.strtab + symtab.sym[m].st_name;
+            }
+            if (start) {
+                *start = symtab.sym[m].st_value;
+            }
+            return true;
+        } else if (symtab.sym[m].st_value < addr) {
+            l = m + 1;
+        } else {
+            r = m;
+        }
+    }
+    return false;
+}
+
+
 // log_backtrace(prefix)
 //    Print a backtrace to `log.txt`, each line prefixed by `prefix`.
 
@@ -181,7 +217,12 @@ void log_backtrace(const char* prefix) {
         if (!ret_rip) {
             break;
         }
-        log_printf("%s  #%d  %p\n", prefix, frame, ret_rip);
+        const char* name;
+        if (lookup_symbol(ret_rip, &name, nullptr)) {
+            log_printf("%s  #%d  %p  <%s>\n", prefix, frame, ret_rip, name);
+        } else {
+            log_printf("%s  #%d  %p\n", prefix, frame, ret_rip);
+        }
         rbp = next_rbp;
         ++frame;
     }
@@ -254,7 +295,12 @@ void assert_fail(const char* file, int line, const char* msg) {
         if (!ret_rip) {
             break;
         }
-        error_printf("  #%d  %p\n", frame, ret_rip);
+        const char* name;
+        if (lookup_symbol(ret_rip, &name, nullptr)) {
+            error_printf("  #%d  %p  <%s>\n", frame, ret_rip, name);
+        } else {
+            error_printf("  #%d  %p\n", frame, ret_rip);
+        }
         rbp = next_rbp;
         ++frame;
     }
@@ -275,7 +321,8 @@ extern "C" {
 //    Return 0 if the static variables guarded by `*guard` are already
 //    initialized. Otherwise lock `*guard` and return 1. The compiler
 //    will initialize the statics, then call `__cxa_guard_release`.
-int __cxa_guard_acquire(std::atomic<char>* guard) {
+int __cxa_guard_acquire(long long* arg) {
+    std::atomic<char>* guard = reinterpret_cast<std::atomic<char>*>(arg);
     if (guard->load(std::memory_order_relaxed) == 2) {
         return 0;
     }
@@ -295,7 +342,8 @@ int __cxa_guard_acquire(std::atomic<char>* guard) {
 // __cxa_guard_release(guard)
 //    Mark `guard` to indicate that the static variables it guards are
 //    initialized.
-void __cxa_guard_release(std::atomic<char>* guard) {
+void __cxa_guard_release(long long* arg) {
+    std::atomic<char>* guard = reinterpret_cast<std::atomic<char>*>(arg);
     guard->store(2);
 }
 

@@ -74,6 +74,17 @@ bool journalreplayer::analyze(unsigned char* jd, unsigned nblocks) {
             error(mr_[mi].bi, "journal complete_boundary above commit_boundary");
             ok_ = false;
         }
+        if (cur->nref
+            && mi > 0
+            && tiddiff_t(cur->tid - mr_[mi - 1].b->commit_boundary) < 0) {
+            error(mr_[mi].bi, "journal adds data to a committed transaction");
+            ok_ = false;
+        }
+        if (cur->nref
+            && tiddiff_t(cur->tid - mr_[mi].b->complete_boundary) < 0) {
+            error(mr_[mi].bi, "journal adds data to a completed transaction");
+            ok_ = false;
+        }
         if ((cur->flags & jf_complete)
             && tiddiff_t(cur->tid - cur->complete_boundary) >= 0) {
             error(mr_[mi].bi, "completed transaction above complete_boundary");
@@ -124,7 +135,7 @@ bool journalreplayer::is_potential_metablock(const unsigned char* jd) {
         return false;
     }
     auto checksum = from_le(jmb->checksum);
-    return checksum == 0
+    return checksum == nochecksum
         || checksum == crc32c(jd + 16, blocksize - 16);
 }
 
@@ -190,7 +201,7 @@ unsigned journalreplayer::analyze_block_reference(jmetablock* jmb,
         if (is_potential_metablock(djd)) {
             error(dbi, "referenced datablock looks like metablock (recoverable)");
             jmb->flags |= jf_error;
-        } else if (bchecksum != 0
+        } else if (bchecksum != nochecksum
                    && bchecksum != crc32c(djd, blocksize)) {
             error(dbi, "referenced datablock has bad checksum (recoverable)");
             jmb->flags |= jf_error;

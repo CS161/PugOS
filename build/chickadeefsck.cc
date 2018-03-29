@@ -422,31 +422,34 @@ static void usage() {
 
 int main(int argc, char** argv) {
     bool replay = false;
-    for (; argc > 1 && argv[1][0] == '-'; --argc, ++argv) {
-        if (strcmp(argv[1], "-V") == 0) {
+
+    int opt;
+    while ((opt = getopt(argc, argv, "Vr")) != -1) {
+        switch (opt) {
+        case 'V':
             verbose = true;
-        } else if (strcmp(argv[1], "-r") == 0) {
-            replay = true;
-        } else if (strcmp(argv[1], "-") == 0) {
             break;
-        } else {
+        case 'r':
+            replay = true;
+            break;
+        default:
             usage();
         }
     }
-    if (argc != 1 && argc != 2) {
+    if (optind != argc && optind + 1 != argc) {
         usage();
     }
 
     // open and read disk image
     const char* filename = "<stdin>";
     int fd = STDIN_FILENO;
-    if (argc == 2 && strcmp(argv[1], "-") != 0) {
-        fd = open(argv[1], O_RDONLY);
+    if (optind + 1 == argc && strcmp(argv[optind], "-") != 0) {
+        filename = argv[optind];
+        fd = open(filename, O_RDONLY);
         if (fd == -1) {
-            fprintf(stderr, "%s: %s\n", argv[1], strerror(errno));
+            fprintf(stderr, "%s: %s\n", filename, strerror(errno));
             exit(1);
         }
-        filename = argv[1];
     }
 
     struct stat s;
@@ -502,6 +505,7 @@ int main(int argc, char** argv) {
     sb.nblocks = from_le(sb.nblocks);
     sb.nswap = from_le(sb.nswap);
     sb.ninodes = from_le(sb.ninodes);
+    sb.njournal = from_le(sb.njournal);
     sb.swap_bn = from_le(sb.swap_bn);
     sb.fbb_bn = from_le(sb.fbb_bn);
     sb.inode_bn = from_le(sb.inode_bn);
@@ -545,6 +549,10 @@ int main(int argc, char** argv) {
     }
     if (sb.journal_bn < sb.data_bn || sb.journal_bn > sb.nblocks) {
         eprintf("unexpected journal_bn %u\n", sb.journal_bn);
+    }
+    if (sb.njournal > sb.nblocks - sb.journal_bn) {
+        eprintf("unexpected njournal %u (expected at least %u)\n",
+                sb.njournal, sb.nblocks + sb.journal_bn);
     }
     if (nerrors > 0) {
         exit(1);

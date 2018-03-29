@@ -239,7 +239,6 @@ chickadeefs::inode* chkfsstate::get_inode(inum_t inum) {
     }
     if (ino != nullptr) {
         ino += inum % chickadeefs::inodesperblock;
-        ++ino->mref;
     }
     return ino;
 }
@@ -249,7 +248,6 @@ chickadeefs::inode* chkfsstate::get_inode(inum_t inum) {
 //    Drop the reference to `ino`.
 void chkfsstate::put_inode(inode* ino) {
     if (ino) {
-        --ino->mref;
         bufcache::get().put_block(ROUNDDOWN(ino, PAGESIZE));
     }
 }
