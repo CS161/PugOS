@@ -19,6 +19,8 @@ struct bufentry {
     unsigned flags_ = 0;             // flags
     void* buf_ = nullptr;            // memory buffer used for entry
 
+    volatile int fetch_status_ = 0;
+
     list_links entry_link_;
 
     enum {
@@ -47,6 +49,8 @@ struct bufcache {
     void* get_disk_block(blocknum_t bn,
                          clean_block_function cleaner = nullptr);
     void put_block(void* pg);
+
+    size_t find_empty_bf(chickadeefs::blocknum_t bn);
 
  private:
     static bufcache bc;

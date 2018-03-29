@@ -3,24 +3,15 @@
 
 bufcache bufcache::bc;
 
+#define SUPERBLOCK_BN 0
+
 bufcache::bufcache() {
-    get_disk_block(0);
-    e_[0].ref_ = 1;
+    get_disk_block(SUPERBLOCK_BN);
+    e_[SUPERBLOCK_BN].ref_ = 1;
 }
 
 
-// bufcache::get_disk_block(bn, cleaner)
-//    Read disk block `bn` into the buffer cache, obtain a reference to it,
-//    and return a pointer to its data. The function may block. If this
-//    function reads the disk block from disk, and `cleaner != nullptr`,
-//    then `cleaner` is called on the block data. Returns `nullptr` if
-//    there's no room for the block.
-
-void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
-                               clean_block_function cleaner) {
-    assert(chickadeefs::blocksize == PAGESIZE);
-    auto irqs = lock_.lock();
-
+size_t bufcache::find_empty_bf(chickadeefs::blocknum_t bn) {
     // look for slot containing `bn`
     size_t i;
     for (i = 0; i != ne; ++i) {
@@ -47,19 +38,39 @@ void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
                 }
             }
 
+            // no free block
             if (i == ne) {
-                lock_.unlock(irqs);
-                log_printf("bufcache: no room for block %u\n", bn);
-                return nullptr;
+                return -1;
             }
         }
         e_[i].bn_ = bn;
     }
-
     e_list_.push_back(&e_[i]);
+    return i;
+}
+
+
+// bufcache::get_disk_block(bn, cleaner)
+//    Read disk block `bn` into the buffer cache, obtain a reference to it,
+//    and return a pointer to its data. The function may block. If this
+//    function reads the disk block from disk, and `cleaner != nullptr`,
+//    then `cleaner` is called on the block data. Returns `nullptr` if
+//    there's no room for the block.
+
+void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
+                               clean_block_function cleaner) {
+    assert(chickadeefs::blocksize == PAGESIZE);
+    auto irqs = lock_.lock();
+
+    auto i = find_empty_bf(bn);
+
+    if (i == (size_t) -1) {
+        log_printf("bufcache: no room for block %u\n", bn);
+        return nullptr;
+    }
 
     // mark reference
-    if (bn != 0)
+    if (bn != SUPERBLOCK_BN)
         ++e_[i].ref_;
 
     // switch lock to entry lock
@@ -122,7 +133,7 @@ void bufcache::put_block(void* buf) {
     assert(i != ne);
 
     // drop reference
-    if (e_[i].bn_ != 0) {
+    if (e_[i].bn_ != SUPERBLOCK_BN) {
         --e_[i].ref_;
         // if (e_[i].ref_ == 0) {
         //     e_list_.erase(&e_[i]);

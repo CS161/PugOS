@@ -354,15 +354,25 @@ int ahcistate::read_or_write(idecommand command, void* buf, size_t sz,
 
     // block until ready for command
     waiter(p).block_until(wq_, [&] () {
-            return !slots_outstanding_mask_;
+            return nslots_available_ > 0;
         }, lock_, irqs);
+
+    // find an open slot
+    unsigned slot = nslots_;
+    for (unsigned i = 0; i < nslots_; ++i) {
+        if (!(slots_outstanding_mask_ & (1U << i))) {
+            slot = i;
+            break;
+        }
+    }
+    assert(slot < nslots_);
 
     // send command, record buffer and status storage
     volatile int r = E_AGAIN;
-    clear(0);
-    push_buffer(0, buf, sz);
-    issue_ncq(0, command, off / sectorsize);
-    slot_status_[0] = &r;
+    clear(slot);
+    push_buffer(slot, buf, sz);
+    issue_ncq(slot, command, off / sectorsize);
+    slot_status_[slot] = &r;
 
     lock_.unlock(irqs);
 
@@ -371,6 +381,41 @@ int ahcistate::read_or_write(idecommand command, void* buf, size_t sz,
             return r != E_AGAIN;
         });
     return r;
+}
+
+// returns true iff command was queued
+bool ahcistate::read_or_write_nonblocking(idecommand cmd, void* buf, size_t sz,
+                                          size_t off, volatile int* status) {
+    // `sz` and `off` must be sector-aligned
+    assert(sz % sectorsize == 0 && off % sectorsize == 0);
+
+    // obtain lock
+    auto irqs = lock_.lock();
+
+    // find an open slot
+    unsigned slot = nslots_;
+    for (unsigned i = 0; i < nslots_; ++i) {
+        if (!(slots_outstanding_mask_ & (1U << i))) {
+            slot = i;
+            break;
+        }
+    }
+    // no slots found
+    if (slot == nslots_) {
+        lock_.unlock(irqs);
+        return false;
+    }
+
+    // send command, record buffer and status storage
+    volatile int r = E_AGAIN;
+    clear(slot);
+    push_buffer(slot, buf, sz);
+    issue_ncq(slot, cmd, off / sectorsize);
+    slot_status_[slot] = &r;
+
+    lock_.unlock(irqs);
+
+    return true;
 }
 
 
