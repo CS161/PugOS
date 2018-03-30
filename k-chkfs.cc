@@ -11,7 +11,7 @@ bufcache::bufcache() {
 }
 
 
-size_t bufcache::find_empty_bf(chickadeefs::blocknum_t bn) {
+size_t bufcache::find_bufentry(chickadeefs::blocknum_t bn) {
     // look for slot containing `bn`
     size_t i;
     for (i = 0; i != ne; ++i) {
@@ -50,6 +50,71 @@ size_t bufcache::find_empty_bf(chickadeefs::blocknum_t bn) {
 }
 
 
+// // bufcache::prefetch_disk_block(bn, cleaner)
+// //    Should be called with bufcache.lock_ held
+// bool bufcache::prefetch_disk_block(blocknum_t bn, clean_block_function cleaner){
+//     auto i = find_empty_bf(bn);
+//     if (i == (size_t) -1)
+//         return false;
+
+//     // mark reference
+//     if (bn != SUPERBLOCK_BN)
+//         ++e_[i].ref_;
+
+//     e_[i].lock_noirq();
+
+//     // allocate buffer memory
+//     if (!e_[i].buf_) {
+//         e_[i].buf_ = kalloc(chickadeefs::blocksize);
+//         if (!e_[i].buf_) {
+//             --e_[i].ref_;
+//             e_[i].lock_.unlock_noirq();
+//             return false;
+//         }
+//     }
+
+//     e_[i].flags_ |= bufentry::f_loading;
+//     e_[i].lock_.unlock(irqs);
+
+//     sata_disk->read(e_[i].buf_, chickadeefs::blocksize,
+//                     bn * chickadeefs::blocksize, &e_[i].fetch_status_);
+//     irqs = e_[i].lock_.lock();
+//     e_[i].flags_ = (e_[i].flags_ & ~bufentry::f_loading)
+//         | bufentry::f_loaded;
+//     if (cleaner) {
+//         cleaner(e_[i].buf_);
+//     }
+//     read_wq_.wake_all();
+// }
+
+
+bool bufcache::load_disk_block(size_t i, chickadeefs::blocknum_t bn) {
+    auto irqs = e_[i].lock_.lock();
+    if ((e_[i].flags_ & bufentry::f_loading)
+          || (e_[i].flags_ & bufentry::f_loaded)) {
+        e_[i].lock_.unlock(irqs);
+        return true;
+    }
+
+    if (!e_[i].buf_) {
+        e_[i].buf_ = kalloc(chickadeefs::blocksize);
+        if (!e_[i].buf_) {
+            --e_[i].ref_;
+            e_[i].lock_.unlock(irqs);
+            return false;
+        }
+    }
+    e_[i].flags_ |= bufentry::f_loading;
+    e_[i].lock_.unlock(irqs);
+
+    sata_disk->read_nonblocking(e_[i].buf_, chickadeefs::blocksize,
+                                bn * chickadeefs::blocksize,
+                                &e_[i].fetch_status_);
+
+    return true;
+}
+
+
 // bufcache::get_disk_block(bn, cleaner)
 //    Read disk block `bn` into the buffer cache, obtain a reference to it,
 //    and return a pointer to its data. The function may block. If this
@@ -61,54 +126,116 @@ void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
                                clean_block_function cleaner) {
     assert(chickadeefs::blocksize == PAGESIZE);
     auto irqs = lock_.lock();
+    bool prefetching = true;
+    bool prefetch_resolved = false;
 
-    auto i = find_empty_bf(bn);
-
+    auto i = find_bufentry(bn);
     if (i == (size_t) -1) {
+        lock_.unlock(irqs);
         log_printf("bufcache: no room for block %u\n", bn);
         return nullptr;
     }
 
     // mark reference
-    if (bn != SUPERBLOCK_BN)
+    if (bn != SUPERBLOCK_BN) {
         ++e_[i].ref_;
+    }
 
-    // switch lock to entry lock
-    e_[i].lock_.lock_noirq();
-    lock_.unlock_noirq();
+    // only prefetch if we're loading the block for the first time
+    if ((e_[i].flags_ & bufentry::f_loaded)
+          || (e_[i].flags_ & bufentry::f_loading)) {
+        prefetching = false;
+    }
 
-    // load block, or wait for concurrent reader to load it
-    while (!(e_[i].flags_ & bufentry::f_loaded)) {
-        if (!(e_[i].flags_ & bufentry::f_loading)) {
-            if (!e_[i].buf_) {
-                e_[i].buf_ = kalloc(chickadeefs::blocksize);
-                if (!e_[i].buf_) {
-                    --e_[i].ref_;
-                    e_[i].lock_.unlock(irqs);
-                    return nullptr;
-                }
+    lock_.unlock(irqs);
+    if (!load_disk_block(i, bn)) {
+        return nullptr;
+    }
+
+    if (prefetching && n_prefetch) {
+        for (unsigned n = 1; n <= n_prefetch; ++n) {
+            irqs = lock_.lock();
+            auto pref_i = find_bufentry(bn + n);
+            if (pref_i == (size_t) -1) {
+                lock_.unlock(irqs);
+                break;
             }
-            e_[i].flags_ |= bufentry::f_loading;
-            e_[i].lock_.unlock(irqs);
-            sata_disk->read(e_[i].buf_, chickadeefs::blocksize,
-                            bn * chickadeefs::blocksize);
-            irqs = e_[i].lock_.lock();
-            e_[i].flags_ = (e_[i].flags_ & ~bufentry::f_loading)
-                | bufentry::f_loaded;
-            if (cleaner) {
-                cleaner(e_[i].buf_);
+            ++e_[pref_i].ref_;
+            e_[pref_i].was_prefetched_ = true;
+            lock_.unlock(irqs);
+
+            if (!load_disk_block(pref_i, bn + n)) {
+                break;
             }
-            read_wq_.wake_all();
-        } else {
-            waiter(current()).block_until(read_wq_, [&] () {
-                    return (e_[i].flags_ & bufentry::f_loading) == 0;
-                }, e_[i].lock_, irqs);
         }
     }
+
+    irqs = sata_disk->lock_.lock();
+    while (e_[i].fetch_status_ == E_AGAIN) {
+        waiter(current()).block_until(sata_disk->wq_, [&] () {
+                return e_[i].fetch_status_ != E_AGAIN;
+            }, sata_disk->lock_, irqs);
+    }
+    sata_disk->lock_.unlock(irqs);
+
+    irqs = e_[i].lock_.lock();
+    if (e_[i].flags_ & bufentry::f_loading) {
+        if (e_[i].fetch_status_ == E_IO) {
+            // SEND HELP
+            log_printf("EORAGJIESRKVKSEOIRGJO:EFKWACAE\n");
+        }
+        
+        e_[i].flags_ = (e_[i].flags_ & ~bufentry::f_loading)
+            | bufentry::f_loaded;
+        if (cleaner) {
+            cleaner(e_[i].buf_);
+        }
+        if (e_[i].was_prefetched_) {
+            prefetch_resolved = true;
+        }
+    }
+
+
+
+    // // load block, or wait for concurrent reader to load it
+    // while (!(e_[i].flags_ & bufentry::f_loaded)) {
+    //     if (!(e_[i].flags_ & bufentry::f_loading)) {
+    //         if (!e_[i].buf_) {
+    //             e_[i].buf_ = kalloc(chickadeefs::blocksize);
+    //             if (!e_[i].buf_) {
+    //                 --e_[i].ref_;
+    //                 e_[i].lock_.unlock(irqs);
+    //                 return nullptr;
+    //             }
+    //         }
+    //         e_[i].flags_ |= bufentry::f_loading;
+    //         e_[i].lock_.unlock(irqs);
+    //         sata_disk->read(e_[i].buf_, chickadeefs::blocksize,
+    //                         bn * chickadeefs::blocksize, &e_[i].fetch_status_);
+    //         irqs = e_[i].lock_.lock();
+    //         e_[i].flags_ = (e_[i].flags_ & ~bufentry::f_loading)
+    //             | bufentry::f_loaded;
+    //         if (cleaner) {
+    //             cleaner(e_[i].buf_);
+    //         }
+    //         read_wq_.wake_all();
+    //     } else {
+    //         waiter(current()).block_until(read_wq_, [&] () {
+    //                 return (e_[i].flags_ & bufentry::f_loading) == 0;
+    //             }, e_[i].lock_, irqs);
+    //     }
+    // }
 
     // return memory
     auto buf = e_[i].buf_;
     e_[i].lock_.unlock(irqs);
+
+    if (prefetch_resolved) {
+        irqs = lock_.lock();
+        --e_[i].ref_;
+        lock_.unlock(irqs);
+    }
+
     return buf;
 }
 
@@ -239,6 +366,7 @@ chickadeefs::inode* chkfsstate::get_inode(inum_t inum) {
     }
     if (ino != nullptr) {
         ino += inum % chickadeefs::inodesperblock;
+        ++ino->mref;
     }
     return ino;
 }
@@ -248,6 +376,7 @@ chickadeefs::inode* chkfsstate::get_inode(inum_t inum) {
 //    Drop the reference to `ino`.
 void chkfsstate::put_inode(inode* ino) {
     if (ino) {
+        --ino->mref;
         bufcache::get().put_block(ROUNDDOWN(ino, PAGESIZE));
     }
 }

@@ -228,11 +228,13 @@ struct ahcistate {
     static ahcistate* find(int pci_addr = 0, int sata_port = 0);
 
     // high-level functions (they block)
-    inline int read(void* buf, size_t sz, size_t off);
-    inline bool read_nonblock(void* buf, size_t sz, size_t off,
+    inline int read(void* buf, size_t sz, size_t off, volatile int* status);
+    inline bool read_nonblocking(void* buf, size_t sz, size_t off,
                               volatile int* status);
-    inline int write(const void* buf, size_t sz, size_t off);
-    int read_or_write(idecommand cmd, void* buf, size_t sz, size_t off);
+    inline int write(const void* buf, size_t sz, size_t off,
+                     volatile int* status);
+    int read_or_write(idecommand cmd, void* buf, size_t sz, size_t off,
+                      volatile int* status);
 
     // returns true iff command was queued
     bool read_or_write_nonblocking(idecommand cmd, void* buf, size_t sz,
@@ -281,18 +283,20 @@ inline memfile* memfile::initfs_lookup(const char* name) {
 }
 
 
-inline int ahcistate::read(void* buf, size_t sz, size_t off) {
-    return read_or_write(cmd_read_fpdma_queued, buf, sz, off);
+inline int ahcistate::read(void* buf, size_t sz, size_t off,
+                           volatile int* status) {
+    return read_or_write(cmd_read_fpdma_queued, buf, sz, off, status);
 }
-inline bool ahcistate::read_nonblock(void* buf, size_t sz, size_t off,
+inline bool ahcistate::read_nonblocking(void* buf, size_t sz, size_t off,
                                      volatile int* status) {
     return read_or_write_nonblocking(cmd_read_fpdma_queued, buf, sz, off,
                                      status);
 }
 
-inline int ahcistate::write(const void* buf, size_t sz, size_t off) {
+inline int ahcistate::write(const void* buf, size_t sz, size_t off,
+                            volatile int* status) {
     return read_or_write(cmd_write_fpdma_queued, const_cast<void*>(buf),
-                         sz, off);
+                         sz, off, status);
 }
 
 #endif

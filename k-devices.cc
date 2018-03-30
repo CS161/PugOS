@@ -344,7 +344,7 @@ inline void ahcistate::acknowledge(int slot, int result) {
 //    Can block. Returns 0 on success and an error code on failure.
 
 int ahcistate::read_or_write(idecommand command, void* buf, size_t sz,
-                             size_t off) {
+                             size_t off, volatile int* status) {
     // `sz` and `off` must be sector-aligned
     assert(sz % sectorsize == 0 && off % sectorsize == 0);
 
@@ -368,19 +368,19 @@ int ahcistate::read_or_write(idecommand command, void* buf, size_t sz,
     assert(slot < nslots_);
 
     // send command, record buffer and status storage
-    volatile int r = E_AGAIN;
+    *status = E_AGAIN;
     clear(slot);
     push_buffer(slot, buf, sz);
     issue_ncq(slot, command, off / sectorsize);
-    slot_status_[slot] = &r;
+    slot_status_[slot] = status;
 
     lock_.unlock(irqs);
 
     // wait for response
     waiter(p).block_until(wq_, [&] () {
-            return r != E_AGAIN;
+            return *status != E_AGAIN;
         });
-    return r;
+    return *status;
 }
 
 // returns true iff command was queued
@@ -407,11 +407,11 @@ bool ahcistate::read_or_write_nonblocking(idecommand cmd, void* buf, size_t sz,
     }
 
     // send command, record buffer and status storage
-    volatile int r = E_AGAIN;
+    *status = E_AGAIN;
     clear(slot);
     push_buffer(slot, buf, sz);
     issue_ncq(slot, cmd, off / sectorsize);
-    slot_status_[slot] = &r;
+    slot_status_[slot] = status;
 
     lock_.unlock(irqs);
 

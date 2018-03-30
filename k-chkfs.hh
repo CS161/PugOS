@@ -20,6 +20,7 @@ struct bufentry {
     void* buf_ = nullptr;            // memory buffer used for entry
 
     volatile int fetch_status_ = 0;
+    bool was_prefetched_ = false;
 
     list_links entry_link_;
 
@@ -35,7 +36,8 @@ struct bufcache {
     using blocknum_t = bufentry::blocknum_t;
     static constexpr blocknum_t emptyblock = bufentry::emptyblock;
 
-    static constexpr size_t ne = 10;
+    static constexpr size_t ne = 100;
+    static constexpr size_t n_prefetch = 20;
 
     spinlock lock_;                  // protects all entries' bn_ and ref_
     wait_queue read_wq_;
@@ -50,7 +52,8 @@ struct bufcache {
                          clean_block_function cleaner = nullptr);
     void put_block(void* pg);
 
-    size_t find_empty_bf(chickadeefs::blocknum_t bn);
+    size_t find_bufentry(chickadeefs::blocknum_t bn);
+    bool load_disk_block(size_t i, chickadeefs::blocknum_t bn);
 
  private:
     static bufcache bc;
@@ -92,6 +95,7 @@ inline void bufentry::clear() {
     assert(ref_ == 0);
     flags_ = 0;
     buf_ = nullptr;
+    was_prefetched_ = false;
 }
 
 inline bufcache& bufcache::get() {
