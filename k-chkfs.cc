@@ -160,8 +160,10 @@ void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
                 lock_.unlock(irqs);
                 break;
             }
-            ++e_[pref_i].ref_;
-            e_[pref_i].was_prefetched_ = true;
+            if (e_[pref_i].ref_ == 0) {
+                ++e_[pref_i].ref_;
+                e_[pref_i].was_prefetched_ = true;
+            }
             lock_.unlock(irqs);
 
             if (!load_disk_block(pref_i, bn + n)) {
