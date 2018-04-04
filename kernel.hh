@@ -420,7 +420,7 @@ void log_vprintf(const char* format, va_list val) __attribute__((noinline));
 void debug_printf_(const char* file, const char* func, int line,
                           const char* format, ...);
 
-#define DEBUG false
+#define DEBUG true
 #include "k-debug.hh"
 
 // log_backtrace
@@ -522,5 +522,13 @@ inline irqstate proc::lock_pagetable_read() {
 }
 inline void proc::unlock_pagetable_read(irqstate&) {
 }
+
+struct disk_loader : public proc::loader {
+    static constexpr unsigned namesize = 64;
+    char name_[namesize];
+
+    ssize_t get_page(uint8_t** pg, size_t off) override;
+    void put_page(uint8_t* pg) override;
+};
 
 #endif

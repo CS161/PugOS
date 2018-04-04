@@ -2,6 +2,7 @@
 #include "elf.h"
 #include "k-vmiter.hh"
 #include "k-devices.hh"
+#include "k-chkfs.hh"
 
 proc* ptable[NPROC];                    // array of process descriptor pointers
 // protects `ptable`, pid_, ppid_, and children_
@@ -154,6 +155,19 @@ void memfile_loader::put_page(uint8_t* pg) {
 }
 
 
+ssize_t disk_loader::get_page(uint8_t** pg, size_t off) {
+    auto buf = reinterpret_cast<uint8_t*>(kalloc(PAGESIZE));
+    int r = chickadeefs_read_file_data(name_, buf, PAGESIZE, off);
+    *pg = buf;
+
+    return r;
+}
+
+void disk_loader::put_page(uint8_t* pg) {
+    kfree(pg);
+}
+
+
 // proc::load(binary_name)
 //    Load the code corresponding to program `binary_name` into this process
 //    and set `regs_->reg_rip` to its entry point. Calls `kallocpage()`.
@@ -185,6 +199,8 @@ int proc::load(loader& ld) {
     // validate the binary
     uint8_t* headerpg;
     ssize_t r = ld.get_page(&headerpg, 0);
+    debug_printf("proc::load: read %d bytes from %p, wanted at least %d\n",
+        r, &headerpg, sizeof(elf_header));
     if (r < 0) {
         goto exit;
     } else if (size_t(r) < sizeof(elf_header)) {

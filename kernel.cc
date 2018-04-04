@@ -959,6 +959,19 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
+
+        // load program
+        disk_loader dl;
+        dl.pagetable_ = npt;
+        memcpy(dl.name_, program_name, name_sz);
+        auto load_r = load(dl);
+        if (load_r < 0) {
+            r = load_r;
+            debug_printf("[%d] exec load failed, r = %d\n", pid_, load_r);
+            break;
+        }
+
+
         // get the total length of the argv array
         size_t argv_len = 0;
         for (size_t i = 0; i < argc; i++) {
@@ -1010,6 +1023,8 @@ uintptr_t proc::syscall(regstate* regs) {
         init_user(pid_, npt);
         yields_ = old_yields;
 
+        regs_ = regs;
+
         // align stack by 16 bytes
         regs_->reg_rsp = MEMSIZE_VIRTUAL - 8;
 
@@ -1021,18 +1036,8 @@ uintptr_t proc::syscall(regstate* regs) {
 
         set_pagetable(pagetable_);
 
-        // load program
-        auto irqs = memfile::lock_.lock();
-        auto load_r = this->load(program_name);
-        memfile::lock_.unlock(irqs);
-        if (load_r < 0) {
-            set_pagetable(old_pt);
-            nuke_pagetable(npt);
-            pagetable_ = old_pt;
-            *regs_ = old_regs;
-            r = load_r;
-            break;
-        }
+        // set program entry point
+        regs_->reg_rip = dl.entry_rip_;
 
         // set 1st argument to argc
         regs_->reg_rdi = argc;
