@@ -1072,6 +1072,17 @@ uintptr_t proc::syscall(regstate* regs) {
         return chickadeefs_read_file_data(filename, buf, sz, off);
     }
 
+    // oh god why
+    case SYSCALL_MEMSET: {
+        void* v = reinterpret_cast<void*>(regs->reg_rdi + 0xFFFFFFFF80000000);
+        int c = (int) regs->reg_rsi;
+        size_t n = (size_t) regs->reg_rdx;
+
+        memset(v, c, n);
+        r = 0;
+        break;
+    }
+
     default:
         // no such system call
         log_printf("[%d] no such system call %u\n", pid_, regs->reg_rax);

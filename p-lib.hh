@@ -260,6 +260,13 @@ inline ssize_t sys_readdiskfile(const char* filename,
                     reinterpret_cast<uintptr_t>(buf), sz, off);
 }
 
+// sys_memset
+//    The least safe syscall in history
+inline void sys_memset(uintptr_t v, int c, size_t n) {
+    syscall0(SYSCALL_MEMSET, v, c, n);
+}
+
+
 // sys_panic(msg)
 //    Panic.
 static inline pid_t __attribute__((noreturn)) sys_panic(const char* msg) {
