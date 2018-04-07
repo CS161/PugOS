@@ -247,3 +247,50 @@ size_t vnode_memfile::write(uintptr_t buf, size_t sz, size_t& off) {
     memfile::lock_.unlock(irqs);
     return n;
 }
+
+size_t vnode_inode::read(uintptr_t buf, size_t sz, size_t& off) {
+    auto& bc = bufcache::get();
+    auto& fs = chkfsstate::get();
+
+    i_->lock_read();
+
+    size_t nread = 0;
+    while (sz > 0) {
+        size_t ncopy = 0;
+
+        // read inode contents, copy data
+        size_t blockoff = ROUNDDOWN(off, fs.blocksize);
+        if (void* data = fs.get_data_block(i_, blockoff)) {
+            size_t bsz = min(i_->size - blockoff, fs.blocksize);
+            size_t boff = off - blockoff;
+            if (bsz > boff) {
+                ncopy = bsz - boff;
+                if (ncopy > sz) {
+                    ncopy = sz;
+                }
+                memcpy(reinterpret_cast<unsigned char*>(buf) + nread,
+                       reinterpret_cast<unsigned char*>(data) + boff,
+                       ncopy);
+            }
+            bc.put_block(data);
+        }
+
+        // account for copied data
+        if (ncopy == 0) {
+            break;
+        }
+        nread += ncopy;
+        off += ncopy;
+        sz -= ncopy;
+    }
+
+    i_->unlock_read();
+    return nread;
+}
+
+size_t vnode_inode::write(uintptr_t buf, size_t sz, size_t& off) {
+    i_->lock_write();
+    // do things
+    i_->unlock_write();
+    return 0;
+}

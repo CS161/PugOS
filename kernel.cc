@@ -676,8 +676,6 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
-        debug_printf("Reading from fd %d\n", fd);
-
         // If size is 0 do nothing
         if (sz == 0) {
             fdtable_->lock_.unlock(irqs);
@@ -713,6 +711,9 @@ uintptr_t proc::syscall(regstate* regs) {
         }
 
         f->deref();
+
+        debug_printf("[%d] sys_%s %d bytes\n", pid_,
+            regs->reg_rax == SYSCALL_READ ? "read read" : "write wrote", r);
 
         break;
     }
@@ -765,7 +766,7 @@ uintptr_t proc::syscall(regstate* regs) {
         const char* path = reinterpret_cast<const char*>(regs->reg_rdi);
         int flags = regs->reg_rsi;
         bool created = false;
-        debug_printf("Opening a file\n");
+        debug_printf("[%d] sys_open('%s')\n", pid_, path);
 
         auto path_sz = check_string_termination(path, memfile::namesize);
         if (path_sz < 0) {
@@ -773,46 +774,60 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
-        auto irqs = memfile::lock_.lock();
-        memfile* m = memfile::initfs_lookup(path);
+        auto& fs = chkfsstate::get();
 
-        if (m == nullptr) {
+        // read directory to find file inode number
+        auto dirino = fs.get_inode(1);
+        assert(dirino);
+        dirino->lock_read();
+
+        auto ino = fs.lookup_inode(dirino, path);
+
+        dirino->unlock_read();
+        fs.put_inode(dirino);
+
+        // auto irqs = memfile::lock_.lock();
+        // memfile* m = memfile::initfs_lookup(path);
+
+        if (!ino) {
             if (flags & OF_CREATE) {
-                // create new empty file with name
-                size_t new_index = -1;
-                for (size_t i = 0; i < memfile::initfs_size; i++) {
-                    if (memfile::initfs[i].empty()) {
-                        new_index = i;
-                        break;
-                    }
-                }
-                // unless no room, then fault
-                if (new_index == (size_t) -1) {
-                    r = E_NOSPC;
-                    memfile::lock_.unlock(irqs);
-                    break;
-                }
+                // TODO: what do you do here???
+                r = E_PERM;
+                break;
 
-                m = &memfile::initfs[new_index];
-                auto data = reinterpret_cast<unsigned char*>(kallocpage());
-                if (!data) {
-                    memfile::lock_.unlock(irqs);
-                    r = E_NOMEM;
-                    break;
-                }
-                *m = memfile(path, data, data + PAGESIZE);
-                created = true;
+                // // create new empty file with name
+                // size_t new_index = -1;
+                // for (size_t i = 0; i < memfile::initfs_size; i++) {
+                //     if (memfile::initfs[i].empty()) {
+                //         new_index = i;
+                //         break;
+                //     }
+                // }
+                // // unless no room, then fault
+                // if (new_index == (size_t) -1) {
+                //     r = E_NOSPC;
+                //     memfile::lock_.unlock(irqs);
+                //     break;
+                // }
+
+                // m = &memfile::initfs[new_index];
+                // auto data = reinterpret_cast<unsigned char*>(kallocpage());
+                // if (!data) {
+                //     memfile::lock_.unlock(irqs);
+                //     r = E_NOMEM;
+                //     break;
+                // }
+                // *m = memfile(path, data, data + PAGESIZE);
+                // created = true;
             }
             else {
                 r = E_NOENT;
-                memfile::lock_.unlock(irqs);
                 break;
             }
         }
-        memfile::lock_.unlock(irqs);
 
         int fd = -1;
-        irqs = fdtable_->lock_.lock();
+        auto irqs = fdtable_->lock_.lock();
         for (int i = 0; i < NFDS; i++) {
             if (fdtable_->fds_[i] == nullptr) {
                 fd = i;
@@ -821,17 +836,18 @@ uintptr_t proc::syscall(regstate* regs) {
         }
 
         file* f = knew<file>();
-        vnode* v = knew<vnode_memfile>(m);
+        vnode* v = knew<vnode_inode>(ino);
         if (!f || !v || fd == -1) {
             fdtable_->lock_.unlock(irqs);
+            fs.put_inode(ino);
             kdelete(f);
             kdelete(v);
-            if (created) {
-                irqs = memfile::lock_.lock();
-                kfree(m->data_);
-                *m = memfile();
-                memfile::lock_.unlock(irqs);
-            }
+            // if (created) {
+            //     irqs = memfile::lock_.lock();
+            //     kfree(m->data_);
+            //     *m = memfile();
+            //     memfile::lock_.unlock(irqs);
+            // }
             if (fd == -1)
                 r = E_NFILE;
             else
@@ -841,16 +857,18 @@ uintptr_t proc::syscall(regstate* regs) {
         fdtable_->fds_[fd] = f;
         fdtable_->lock_.unlock(irqs);
 
-        if (flags & OF_TRUNC) {
-            irqs = memfile::lock_.lock();
-            m->len_ = 0;
-            memfile::lock_.unlock(irqs);
-        }
+        // if (flags & OF_TRUNC) {
+        //     irqs = memfile::lock_.lock();
+        //     m->len_ = 0;
+        //     memfile::lock_.unlock(irqs);
+        // }
 
         f->readable_ = flags & OF_READ;
         f->writeable_ = flags & OF_WRITE;
         f->type_ = file::normie;
         f->vnode_ = v;
+
+        debug_printf("[%d] sys_open succeeded -> fd %d\n", pid_, fd);
 
         r = fd;
 

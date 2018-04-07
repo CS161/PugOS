@@ -1,6 +1,7 @@
 #ifndef CHICKADEE_K_FS_HH
 #define CHICKADEE_K_FS_HH
 #include "k-devices.hh"
+#include "k-chkfs.hh"
 #include "k-wait.hh"
 #include "k-lock.hh"
 
@@ -109,6 +110,17 @@ struct vnode_memfile : vnode {
 
   private:
     memfile* m_;
+};
+
+
+struct vnode_inode : vnode {
+    vnode_inode(chickadeefs::inode* i) : i_(i) { };
+
+    size_t read(uintptr_t buf, size_t sz, size_t& off) override;
+    size_t write(uintptr_t buf, size_t sz, size_t& off) override;
+
+  private:
+    chickadeefs::inode* i_;
 };
 
 
