@@ -676,41 +676,43 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
+        debug_printf("Reading from fd %d\n", fd);
+
+        // If size is 0 do nothing
         if (sz == 0) {
             fdtable_->lock_.unlock(irqs);
             r = 0;
             break;
         }
 
-        // verify inputs are valid
-        auto mem_flags = PTE_P | PTE_U;
+        // Check for valid memory ranges and permissions
+        auto perms = PTE_P | PTE_U;
         if (regs->reg_rax == SYSCALL_READ) {
-            mem_flags |= PTE_W;
+            perms |= PTE_W;
         }
-        if (!validate_memory(addr, sz, mem_flags)) {
+        if (addr + sz > VA_LOWEND ||
+            addr > VA_HIGHMAX - sz ||
+            !vmiter(pagetable_, addr).check_range(sz, perms))
+        {
             fdtable_->lock_.unlock(irqs);
             r = E_FAULT;
-            debug_printf("returning E_FAULT\n");
             break;
         }
 
         f->lock_.lock_noirq();
-        assert(f->refs_ > 0);
         fdtable_->lock_.unlock_noirq();
         f->refs_++;
         f->lock_.unlock(irqs);
 
+        vnode* v = f->vnode_;
         if (regs->reg_rax == SYSCALL_READ) {
-            r = f->vnode_->read(addr, sz, f->off_);
+            r = v->read(addr, sz, f->off_);
         }
         else {
-            r = f->vnode_->write(addr, sz, f->off_);
+            r = v->write(addr, sz, f->off_);
         }
 
         f->deref();
-
-        debug_printf("[%d] sys_%s %d bytes\n", pid_,
-            regs->reg_rax == SYSCALL_READ ? "read read" : "write wrote", r);
 
         break;
     }
