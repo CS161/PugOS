@@ -113,11 +113,14 @@ bool bufcache::load_disk_block(size_t i, chickadeefs::blocknum_t bn) {
     e_[i].flags_ |= bufentry::f_loading;
     e_[i].lock_.unlock(irqs);
 
-    sata_disk->read_nonblocking(e_[i].buf_, chickadeefs::blocksize,
-                                bn * chickadeefs::blocksize,
-                                &e_[i].fetch_status_);
+    int r = sata_disk->read_nonblocking(e_[i].buf_, chickadeefs::blocksize,
+                                        bn * chickadeefs::blocksize,
+                                        &e_[i].fetch_status_);
 
-    return true;
+    if (!r) {
+        e_[i].flags_ &= ~bufentry::f_loading;
+    }
+    return r;
 }
 
 

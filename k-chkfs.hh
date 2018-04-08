@@ -37,7 +37,7 @@ struct bufcache {
     static constexpr blocknum_t emptyblock = bufentry::emptyblock;
 
     static constexpr size_t ne = 100;
-    static constexpr size_t n_prefetch = 15;
+    static constexpr size_t n_prefetch = ne / 5;
 
     spinlock lock_;                  // protects all entries' bn_ and ref_
     wait_queue read_wq_;
