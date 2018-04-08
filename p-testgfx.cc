@@ -17,13 +17,14 @@ uintptr_t pixel_at(unsigned x, unsigned y) {
 }
 
 void process_main() {
+	sys_kdisplay(KDISPLAY_NONE);
+
 	sys_log_printf("[GFX] %dx%dx%d; pw: %d, pitch: %d\n", width, height, depth,
 		pixelwidth, pitch);
 
-
 	// auto addr = pixel_at(0, 0);
 	// sys_log_printf("[GFX] writing to screen at %p\n", addr);
-	sys_memset(pixel_at(0,0), -1, 1);
-	sys_memset(pixel_at(1,1), -1, 1);
+	// sys_memset(pixel_at(0,0), -1, 1);
+	// sys_memset(pixel_at(1,1), -1, 1);
 	sys_exit(0);
 }
