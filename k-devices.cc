@@ -231,9 +231,7 @@ void console_show_cursor(int cpos) {
 }
 
 
-// memfile functions and initial contents
-
-#include "obj/k-initfs.cc"
+// memfile functions
 
 spinlock memfile::lock_;
 
