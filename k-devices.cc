@@ -235,6 +235,8 @@ void console_show_cursor(int cpos) {
 
 #include "obj/k-initfs.cc"
 
+spinlock memfile::lock_;
+
 memfile* memfile::initfs_lookup(const char* name, size_t namelen) {
     for (memfile* f = initfs; f != initfs + initfs_size; ++f) {
         if (!f->empty()
@@ -245,8 +247,6 @@ memfile* memfile::initfs_lookup(const char* name, size_t namelen) {
     }
     return nullptr;
 }
-
-spinlock memfile::lock_;
 
 
 // ahcistate: functions for dealing with SATA disks

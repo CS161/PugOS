@@ -234,38 +234,72 @@ void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
 }
 
 
+// bufcache::find_entry(buf)
+//    Return the `bufentry` containing pointer `buf`. This entry
+//    must have a nonzero `ref_`.
+
+bufentry* bufcache::find_entry(void* buf) {
+    if (buf) {
+        buf = ROUNDDOWN(buf, chickadeefs::blocksize);
+
+        // Synchronization is not necessary!
+        // 1. The relevant entry has nonzero `ref_`, so its `buf_`
+        //    will not change.
+        // 2. No other entry has the same `buf_` because nonempty
+        //    entries have unique `buf_`s.
+        // (XXX Really, though, `buf_` should be std::atomic<void*>.)
+        for (size_t i = 0; i != ne; ++i) {
+            if (e_[i].buf_ == buf) {
+                return &e_[i];
+            }
+        }
+        assert(false);
+    }
+    return nullptr;
+}
+
+
 // bufcache::put_block(buf)
 //    Decrement the reference count for buffer cache block `buf`.
 
 void bufcache::put_block(void* buf) {
-    if (!buf) {
-        return;
-    }
-
-    auto irqs = lock_.lock();
-
-    // find block
-    size_t i;
-    for (i = 0; i != ne; ++i) {
-        if (e_[i].ref_ != 0 && e_[i].buf_ == buf) {
-            break;
+    if (bufentry* e = find_entry(buf)) {
+        auto irqs = e->lock_.lock();
+        // drop reference
+        if (e->bn_ != SUPERBLOCK_BN) {
+            --e->ref_;
+            // if (e_[i].ref_ == 0) {
+            //     e_list_.erase(&e_[i]);
+            //     kfree(e_[i].buf_);
+            //     e_[i].clear();
+            // }
         }
+        e->lock_.unlock(irqs);
     }
-    assert(i != ne);
-
-    // drop reference
-    if (e_[i].bn_ != SUPERBLOCK_BN) {
-        --e_[i].ref_;
-        // if (e_[i].ref_ == 0) {
-        //     e_list_.erase(&e_[i]);
-        //     kfree(e_[i].buf_);
-        //     e_[i].clear();
-        // }
-    }
-
-    lock_.unlock(irqs);
 }
 
+
+// bufcache::sync(drop)
+//    Write all dirty buffers to disk (blocking until complete).
+//    Additionally free all buffer cache contents, except referenced
+//    blocks, if `drop` is true.
+
+int bufcache::sync(bool drop) {
+    // Write dirty buffers to disk: your code here!
+
+    if (drop) {
+        auto irqs = lock_.lock();
+        for (size_t i = 0; i != ne; ++i) {
+            if (e_[i].bn_ != emptyblock && !e_[i].ref_) {
+                kfree(e_[i].buf_);
+                e_[i].clear();
+            }
+        }
+        lock_.unlock(irqs);
+    }
+
+    return 0;
+}
 
 
 // clean_inode_block(buf)
@@ -356,7 +390,8 @@ chickadeefs::inode* chkfsstate::get_inode(inum_t inum) {
     chickadeefs::inode* ino = nullptr;
     if (inum > 0 && inum < ninodes) {
         ino = reinterpret_cast<inode*>
-            (bc.get_disk_block(inode_bn + inum / chickadeefs::inodesperblock));
+            (bc.get_disk_block(inode_bn + inum / chickadeefs::inodesperblock,
+                               clean_inode_block));
     }
     if (ino != nullptr) {
         ino += inum % chickadeefs::inodesperblock;
@@ -411,7 +446,7 @@ unsigned char* chkfsstate::get_data_block(inode* ino, size_t off) {
         }
 
         if (indirbn != 0) {
-            auto indirect_data = bc.get_disk_block(databn);
+            auto indirect_data = bc.get_disk_block(indirbn);
             assert(indirect_data);
             databn = reinterpret_cast<chickadeefs::blocknum_t*>(indirect_data)
                 [bi % chickadeefs::nindirect];

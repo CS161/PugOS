@@ -55,6 +55,9 @@ struct bufcache {
 
     size_t find_bufentry(chickadeefs::blocknum_t bn);
     bool load_disk_block(size_t i, chickadeefs::blocknum_t bn);
+    bufentry* find_entry(void* data);
+
+    int sync(bool drop);
 
  private:
     static bufcache bc;

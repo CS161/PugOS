@@ -44,7 +44,8 @@ KERNEL_OBJS = $(OBJDIR)/k-exception.ko \
 	$(OBJDIR)/k-init.ko $(OBJDIR)/k-hardware.ko $(OBJDIR)/k-mpspec.ko \
 	$(OBJDIR)/k-devices.ko $(OBJDIR)/k-cpu.ko $(OBJDIR)/k-proc.ko \
 	$(OBJDIR)/crc32c.ko $(OBJDIR)/k-chkfs.ko \
-	$(OBJDIR)/k-memviewer.ko $(OBJDIR)/lib.ko $(OBJDIR)/k-vfs.ko
+	$(OBJDIR)/k-memviewer.ko $(OBJDIR)/lib.ko $(OBJDIR)/k-vfs.ko \
+	$(OBJDIR)/k-initfs.ko
 
 PROCESS_LIB_OBJS = $(OBJDIR)/lib.o $(OBJDIR)/p-lib.o
 PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
@@ -67,6 +68,7 @@ PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-testrwaddr.o \
 	$(OBJDIR)/p-testvfs.o \
 	$(OBJDIR)/p-testwaitpid.o \
+	$(OBJDIR)/p-testwritefs.o \
 	$(OBJDIR)/p-testzombie.o \
 	$(OBJDIR)/p-true.o \
 	$(OBJDIR)/p-wc.o \
@@ -93,6 +95,7 @@ INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~'
 	obj/p-testrwaddr \
 	obj/p-testvfs \
 	obj/p-testwaitpid \
+	obj/p-testwritefs \
 	obj/p-testzombie \
 	obj/p-true \
 	obj/p-wc \
@@ -106,14 +109,13 @@ DISKFS_CONTENTS = $(shell find diskfs -type f -not -name '\#*\#' -not -name '*~'
 
 
 # Define `CHICKADEE_FIRST_PROCESS` if appropriate
-ifneq ($(filter run-%,$(MAKECMDGOALS)),)
-ifeq ($(words $(MAKECMDGOALS)),1)
-RUNCMD_LASTWORD := $(lastword $(subst -, ,$(MAKECMDGOALS)))
+RUNCMD_LASTWORD := $(filter run-%,$(MAKECMDGOALS))
+ifeq ($(words $(RUNCMD_LASTWORD)),1)
+RUNCMD_LASTWORD := $(lastword $(subst -, ,$(RUNCMD_LASTWORD)))
 ifneq ($(filter obj/p-$(RUNCMD_LASTWORD),$(INITFS_CONTENTS)),)
 RUNSUFFIX := $(RUNCMD_LASTWORD)
 CHICKADEE_FIRST_PROCESS := $(RUNCMD_LASTWORD)
 CPPFLAGS += -DCHICKADEE_FIRST_PROCESS='"$(CHICKADEE_FIRST_PROCESS)"'
-endif
 endif
 endif
 
@@ -153,7 +155,8 @@ $(OBJDIR)/k-initfs.cc: build/mkinitfs.awk \
 	$(INITFS_CONTENTS) $(INITFS_BUILDSTAMP) $(KERNELBUILDSTAMPS)
 	$(call run,echo $(INITFS_CONTENTS) | awk -f build/mkinitfs.awk >,CREATE,$@)
 
-$(OBJDIR)/k-devices.ko: $(OBJDIR)/k-initfs.cc
+$(OBJDIR)/k-initfs.ko: $(OBJDIR)/k-initfs.cc
+	$(call cxxcompile,$(KERNELCXXFLAGS) -O2 -DCHICKADEE_KERNEL -mcmodel=kernel -c $< -o $@,COMPILE $<)
 
 
 # How to make binaries and the boot sector
@@ -217,6 +220,9 @@ chickadeefs.img: $(OBJDIR)/mkchickadeefs \
 	$(OBJDIR)/bootsector $(OBJDIR)/kernel $(DISKFS_CONTENTS) \
 	$(DISKFS_BUILDSTAMP)
 	$(call run,$(OBJDIR)/mkchickadeefs -b 32768 -f 16 -s $(OBJDIR)/bootsector $(OBJDIR)/kernel $(DISKFS_CONTENTS) > $@,CREATE $@)
+
+cleanfs:
+	rm -f chickadeefs.img
 
 
 # How to run QEMU

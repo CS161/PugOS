@@ -94,7 +94,7 @@ inline constexpr T max(T a, T b) {
 }
 
 // msb(x)
-//    Return index of most significant bit in `x`, plus one.
+//    Return index of most significant one bit in `x`, plus one.
 //    Returns 0 if `x == 0`.
 inline constexpr int msb(int x) {
     return x ? sizeof(x) * 8 - __builtin_clz(x) : 0;
@@ -113,6 +113,28 @@ inline constexpr int msb(long long x) {
 }
 inline constexpr int msb(unsigned long long x) {
     return x ? sizeof(x) * 8 - __builtin_clzll(x) : 0;
+}
+
+// lsb(x)
+//    Return index of least significant one bit in `x`, plus one.
+//    Returns 0 if `x == 0`.
+inline constexpr int lsb(int x) {
+    return __builtin_ffs(x);
+}
+inline constexpr int lsb(unsigned x) {
+    return __builtin_ffs(x);
+}
+inline constexpr int lsb(long x) {
+    return __builtin_ffsl(x);
+}
+inline constexpr int lsb(unsigned long x) {
+    return __builtin_ffsl(x);
+}
+inline constexpr int lsb(long long x) {
+    return __builtin_ffsll(x);
+}
+inline constexpr int lsb(unsigned long long x) {
+    return __builtin_ffsll(x);
 }
 
 // rounddown_pow2(x)
@@ -174,6 +196,10 @@ inline uint32_t crc32c(const void* buf, size_t sz) {
 #define SYSCALL_OPEN            107
 #define SYSCALL_UNLINK          108
 #define SYSCALL_READDISKFILE    109
+#define SYSCALL_SYNC            110
+#define SYSCALL_LSEEK           111
+#define SYSCALL_FTRUNCATE       112
+#define SYSCALL_RENAME          113
 
 
 // System call error return values
@@ -220,7 +246,14 @@ inline bool is_error(uintptr_t r) {
 #define OF_READ                 1
 #define OF_WRITE                2
 #define OF_CREATE               4
+#define OF_CREAT                OF_CREATE     // ¯\_(ツ)_/¯
 #define OF_TRUNC                8
+
+// sys_lseek() origins
+#define LSEEK_SET               0    // Seek from beginning of file
+#define LSEEK_CUR               1    // Seek from current position
+#define LSEEK_END               2    // Seek from end of file
+#define LSEEK_SIZE              3    // Do not seek; return file size
 
 
 // Console printing
@@ -308,62 +341,35 @@ void error_printf(const char* format, ...)
 void __attribute__((noinline, noreturn, cold))
 assert_fail(const char* file, int line, const char* msg);
 
-// assert_eq(x, y)
-//    Like `assert(x == y)`, but on failure prints the values of `x` and `y`.
-#define assert_eq(x, y)     do {                                        \
+
+// assert_[eq, ne, lt, le, gt, ge](x, y)
+//    Like `assert(x OP y)`, but also prints the values of `x` and `y` on
+//    failure.
+#define assert_op(x, op, y) do {                                        \
         auto __x = (x); auto __y = (y);                                 \
-        using __t = std::common_type<typeof(__x), typeof(__y)>::type;   \
-        if (__x != __y) {                                               \
-            assert_eq_fail<__t>(__FILE__, __LINE__, #x " == " #y, __x, __y); \
-        }                                                               \
-    } while (0)
+        using __t = typename std::common_type<typeof(__x), typeof(__y)>::type; \
+        if (!(__x op __y)) {                                            \
+            assert_op_fail<__t>(__FILE__, __LINE__, #x " " #op " " #y,  \
+                                __x, #op, __y);                         \
+        } } while (0)
+#define assert_eq(x, y) assert_op(x, ==, y)
+#define assert_ne(x, y) assert_op(x, !=, y)
+#define assert_lt(x, y) assert_op(x, <, y)
+#define assert_le(x, y) assert_op(x, <=, y)
+#define assert_gt(x, y) assert_op(x, >, y)
+#define assert_ge(x, y) assert_op(x, >=, y)
+
 template <typename T>
 void __attribute__((noinline, noreturn, cold))
-assert_eq_fail(const char* file, int line, const char* msg, T x, T y) {
-    char fmt[32];
-    snprintf(fmt, sizeof(fmt), "%%s:%%d: %%%s != %%%s\n",
-             printfmt<T>::spec, printfmt<T>::spec);
+assert_op_fail(const char* file, int line, const char* msg,
+               const T& x, const char* op, const T& y) {
+    char fmt[48];
+    snprintf(fmt, sizeof(fmt), "%%s:%%d: expected %%%s %s %%%s\n",
+             printfmt<T>::spec, op, printfmt<T>::spec);
     error_printf(CPOS(22, 0), COLOR_ERROR, fmt, file, line, x, y);
     assert_fail(file, line, msg);
 }
 
-// assert_ne(x, y)
-//    Like `assert(x != y)`, but on failure prints the values of `x` and `y`.
-#define assert_ne(x, y)     do {                                        \
-        auto __x = (x); auto __y = (y);                                 \
-        using __t = std::common_type<typeof(__x), typeof(__y)>::type;   \
-        if (__x == __y) {                                               \
-            assert_ne_fail<__t>(__FILE__, __LINE__, #x " != " #y, __x, __y); \
-        }                                                               \
-    } while (0)
-template <typename T>
-void __attribute__((noinline, noreturn, cold))
-assert_ne_fail(const char* file, int line, const char* msg, T x, T y) {
-    char fmt[32];
-    snprintf(fmt, sizeof(fmt), "%%s:%%d: %%%s == %%%s\n",
-             printfmt<T>::spec, printfmt<T>::spec);
-    error_printf(CPOS(22, 0), COLOR_ERROR, fmt, file, line, x, y);
-    assert_fail(file, line, msg);
-}
-
-// assert_gt(x, y)
-//    Like `assert(x > y)`, but on failure prints the values of `x` and `y`.
-#define assert_gt(x, y)     do {                                        \
-        auto __x = (x); auto __y = (y);                                 \
-        using __t = std::common_type<typeof(__x), typeof(__y)>::type;   \
-        if (__x <= __y) {                                               \
-            assert_gt_fail<__t>(__FILE__, __LINE__, #x " > " #y, __x, __y); \
-        }                                                               \
-    } while (0)
-template <typename T>
-void __attribute__((noinline, noreturn, cold))
-assert_gt_fail(const char* file, int line, const char* msg, T x, T y) {
-    char fmt[32];
-    snprintf(fmt, sizeof(fmt), "%%s:%%d: %%%s <= %%%s\n",
-             printfmt<T>::spec, printfmt<T>::spec);
-    error_printf(CPOS(22, 0), COLOR_ERROR, fmt, file, line, x, y);
-    assert_fail(file, line, msg);
-}
 
 // assert_memeq(x, y, sz)
 //    If `memcmp(x, y, sz) != 0`, print a message and fail.

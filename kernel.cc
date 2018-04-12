@@ -1101,6 +1101,11 @@ uintptr_t proc::syscall(regstate* regs) {
         break;
     }
 
+    case SYSCALL_SYNC: {
+        r = bufcache::get().sync(regs->reg_rdi != 0);
+        break;
+    }
+
     default:
         // no such system call
         log_printf("[%d] no such system call %u\n", pid_, regs->reg_rax);
