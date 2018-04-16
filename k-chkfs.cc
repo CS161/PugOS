@@ -40,10 +40,10 @@ size_t bufcache::find_bufentry(chickadeefs::blocknum_t bn) {
         // search for empty block in cache
         for (i = 0; i != ne && e_[i].bn_ != emptyblock; ++i) { };
 
+        // search for 0 ref block in lru list
         if (i == ne) {
-            // search for 0 ref block in lru list
             for (auto b = e_list_.front(); b; b = e_list_.next(b)) {
-                if (b->ref_ == 0) {
+                if (b->ref_ == 0 && !b->dirty_) {
                     i = (reinterpret_cast<uintptr_t>(b) -
                          reinterpret_cast<uintptr_t>(&e_)) / sizeof(bufentry);
                     e_list_.erase(b);
@@ -54,7 +54,7 @@ size_t bufcache::find_bufentry(chickadeefs::blocknum_t bn) {
             }
         }
 
-        // no free block found
+        // search for unused prefetches
         if (i == ne) {
             for (auto b = pref_list_.front(); b; b = pref_list_.next(b)) {
                 if (b->was_prefetched_ && b->fetch_status_ != E_AGAIN) {
@@ -95,6 +95,7 @@ size_t bufcache::find_bufentry(chickadeefs::blocknum_t bn) {
     }
 
     e_[i].bn_ = bn;
+    // log_printf("find_bufentry pushing %p\n", &e_[i]);
     e_list_.push_back(&e_[i]);
     return i;
 }
@@ -186,6 +187,7 @@ bufentry* bufcache::get_disk_entry(chickadeefs::blocknum_t bn,
                 debug_printf("\tblock not in cache, doing first load\n");
                 // move block to prefetch list
                 e_list_.erase(&e_[pref_i]);
+                // log_printf("swapping to pref_list %p\n", &e_[pref_i]);
                 pref_list_.push_front(&e_[pref_i]);
                 e_[pref_i].was_prefetched_ = true;
             }
@@ -223,19 +225,28 @@ bufentry* bufcache::get_disk_entry(chickadeefs::blocknum_t bn,
         if (e_[i].was_prefetched_) {
             debug_printf("detected completed prefetch\n");
             prefetch_resolved = true;
+            e_[i].was_prefetched_ = false;
         }
     }
 
-    // return memory
-    auto buf = e_[i].buf_;
     e_[i].lock_.unlock(irqs);
 
     if (prefetch_resolved) {
         irqs = lock_.lock();
         pref_list_.erase(&e_[i]);
+        // log_printf("prefetch resolution pushing %p\n", &e_[i]);
         e_list_.push_back(&e_[i]);
         lock_.unlock(irqs);
     }
+
+
+    // for (auto b = e_list_.front(); b; b = e_list_.next(b)) {
+    //     auto index = (reinterpret_cast<uintptr_t>(b) -
+    //               reinterpret_cast<uintptr_t>(&e_)) / sizeof(bufentry);
+    //     if (index >= ne) {
+    //         log_printf("DANGEROUS BLOCK: %p\n", b);
+    //     }
+    // }
 
     return &e_[i];
 }
@@ -290,8 +301,14 @@ void bufcache::put_entry(bufentry* e) {
 //    Obtain a write reference for `e`.
 
 void bufcache::get_write(bufentry* e) {
-    // Your code here
-    assert(false);
+    auto irqs = e->lock_.lock();
+
+    waiter(current()).block_until(read_wq_, [&] () {
+            return e->write_ref_ == 0;
+        }, e->lock_, irqs);
+    e->write_ref_ = 1;
+    e->dirty_ = true;
+    e->lock_.unlock(irqs);
 }
 
 
@@ -299,8 +316,11 @@ void bufcache::get_write(bufentry* e) {
 //    Release a write reference for `e`.
 
 void bufcache::put_write(bufentry* e) {
-    // Your code here
-    assert(false);
+    auto irqs = e->lock_.lock();
+    --e->write_ref_;
+    e->lock_.unlock(irqs);
+
+    read_wq_.wake_all();
 }
 
 
@@ -312,10 +332,59 @@ void bufcache::put_write(bufentry* e) {
 int bufcache::sync(bool drop) {
     // Write dirty buffers to disk: your code here!
 
+    for (size_t i = 0; i != ne; ++i) {
+        if (e_[i].dirty_) {
+            get_write(&e_[i]);
+            int r = sata_disk->write(e_[i].buf_,
+                                     chickadeefs::blocksize,
+                                     e_[i].bn_ * chickadeefs::blocksize,
+                                     &e_[i].fetch_status_);
+            assert(r >= 0);
+            put_write(&e_[i]);
+
+            e_[i].dirty_ = false;
+        }
+    }
+
     if (drop) {
         auto irqs = lock_.lock();
+
+        // for (auto b = e_list_.front(); b; b = e_list_.next(b)) {
+        //     auto index = (reinterpret_cast<uintptr_t>(b) -
+        //               reinterpret_cast<uintptr_t>(&e_)) / sizeof(bufentry);
+        //     if (index >= ne) {
+        //         log_printf("DANGEROUS BLOCK: %p\n", b);
+        //     }
+        // }
+
+        // for (auto b = e_list_.front(); b; b = e_list_.next(b)) {
+
+        //     auto i = (reinterpret_cast<uintptr_t>(b) -
+        //       reinterpret_cast<uintptr_t>(&e_)) / sizeof(bufentry);
+
+        //     log_printf("sync hitting b=%p (i: %d)\n", b, i);
+        //     if (b && !b->ref_) {
+        //         e_list_.erase(b);
+        //         kfree(b->buf_);
+        //         b->clear();
+        //     }
+        // }
+
+        // for (auto b = pref_list_.front(); b; b = pref_list_.next(b)) {
+        //     if (b->was_prefetched_ && b->fetch_status_ != E_AGAIN) {
+        //         pref_list_.erase(b);
+        //         kfree(b->buf_);
+        //         b->clear();
+        //     }
+        // }
+
+
+
+
         for (size_t i = 0; i != ne; ++i) {
-            if (e_[i].bn_ != emptyblock && !e_[i].ref_) {
+            if (!e_[i].was_prefetched_ && e_[i].bn_ != emptyblock
+                  && !e_[i].ref_) {
+                e_list_.erase(&e_[i]);
                 kfree(e_[i].buf_);
                 e_[i].clear();
             }

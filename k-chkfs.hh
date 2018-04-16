@@ -19,6 +19,10 @@ struct bufentry {
     unsigned flags_ = 0;             // flags
     void* buf_ = nullptr;            // memory buffer used for entry
 
+    bool dirty_ = false;
+    unsigned write_ref_ = 0;         // write refcount
+    wait_queue write_wq_;
+
     volatile int fetch_status_ = 0;
     bool was_prefetched_ = false;
 
@@ -109,6 +113,7 @@ inline void bufentry::clear() {
     flags_ = 0;
     buf_ = nullptr;
     was_prefetched_ = false;
+    dirty_ = false;
 }
 
 inline bufcache& bufcache::get() {
