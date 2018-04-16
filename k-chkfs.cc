@@ -17,6 +17,13 @@ bufcache::bufcache() {
 }
 
 
+// bufcache::find_bufentry(bn, cleaner)
+//    Read disk block `bn` into the buffer cache, obtain a reference to it,
+//    and return a pointer to its bufentry. The function may block. If this
+//    function reads the disk block from disk, and `cleaner != nullptr`,
+//    then `cleaner` is called on the block data. Returns `nullptr` if
+//    there's no room for the block.
+
 size_t bufcache::find_bufentry(chickadeefs::blocknum_t bn) {
     // look for slot containing `bn`
     size_t i;
@@ -131,7 +138,7 @@ bool bufcache::load_disk_block(size_t i, chickadeefs::blocknum_t bn) {
 //    then `cleaner` is called on the block data. Returns `nullptr` if
 //    there's no room for the block.
 
-void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
+bufentry* bufcache::get_disk_entry(chickadeefs::blocknum_t bn,
                                clean_block_function cleaner) {
     assert(chickadeefs::blocksize == PAGESIZE);
     auto irqs = lock_.lock();
@@ -218,7 +225,6 @@ void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
         }
     }
 
-
     // return memory
     auto buf = e_[i].buf_;
     e_[i].lock_.unlock(irqs);
@@ -230,7 +236,7 @@ void* bufcache::get_disk_block(chickadeefs::blocknum_t bn,
         lock_.unlock(irqs);
     }
 
-    return buf;
+    return &e_[i];
 }
 
 
@@ -259,11 +265,11 @@ bufentry* bufcache::find_entry(void* buf) {
 }
 
 
-// bufcache::put_block(buf)
-//    Decrement the reference count for buffer cache block `buf`.
+// bufcache::put_entry(e)
+//    Decrement the reference count for buffer cache entry `e`.
 
-void bufcache::put_block(void* buf) {
-    if (bufentry* e = find_entry(buf)) {
+void bufcache::put_entry(bufentry* e) {
+    if (e) {
         auto irqs = e->lock_.lock();
         // drop reference
         if (e->bn_ != SUPERBLOCK_BN) {
@@ -421,47 +427,56 @@ unsigned char* chkfsstate::get_data_block(inode* ino, size_t off) {
     assert(off % blocksize == 0);
     auto& bc = bufcache::get();
 
-    // look up data block number
+    bufentry* i2e = nullptr;       // bufentry for indirect2 block (if needed)
+    blocknum_t* iptr = nullptr;    // pointer to indirect block # (if needed)
+    bufentry* ie = nullptr;        // bufentry for indirect block (if needed)
+    blocknum_t* dptr = nullptr;    // pointer to direct block #
+    bufentry* de = nullptr;        // bufentry for direct block
+
     unsigned bi = off / blocksize;
-    chickadeefs::blocknum_t databn = 0;
-    if (bi < chickadeefs::ndirect) {
-        databn = ino->direct[bi];
-    } else if (bi < chickadeefs::ndirect + chickadeefs::nindirect) {
-        if (ino->indirect != 0) {
-            auto indirect_data = bc.get_disk_block(ino->indirect);
-            assert(indirect_data);
-            databn = reinterpret_cast<chickadeefs::blocknum_t*>(indirect_data)
-                [bi - chickadeefs::ndirect];
-            bc.put_block(indirect_data);
-        }
-    } else {
-        chickadeefs::blocknum_t indirbn = 0;
+
+    // Set `iptr` to point to the relevant indirect block number
+    // (if one is needed). This is either a pointer into the
+    // indirect2 block, or a pointer to `ino->indirect`, or null.
+    if (bi >= chickadeefs::ndirect + chickadeefs::nindirect) {
         if (ino->indirect2 != 0) {
-            auto indirect2_data = bc.get_disk_block(ino->indirect2);
-            assert(indirect2_data);
-            bi -= chickadeefs::ndirect + chickadeefs::nindirect;
-            indirbn = reinterpret_cast<chickadeefs::blocknum_t*>(indirect2_data)
-                [bi / chickadeefs::nindirect];
-            bc.put_block(indirect2_data);
+            i2e = bc.get_disk_entry(ino->indirect2);
         }
-
-        if (indirbn != 0) {
-            auto indirect_data = bc.get_disk_block(indirbn);
-            assert(indirect_data);
-            databn = reinterpret_cast<chickadeefs::blocknum_t*>(indirect_data)
-                [bi % chickadeefs::nindirect];
-            bc.put_block(indirect_data);
+        if (!i2e) {
+            goto done;
         }
+        iptr = reinterpret_cast<blocknum_t*>(i2e->buf_)
+            + chickadeefs::bi_indirect_index(bi);
+    } else if (bi >= chickadeefs::ndirect) {
+        iptr = &ino->indirect;
     }
 
-    // load data block
-    void* data = nullptr;
-    if (databn) {
-        data = bc.get_disk_block(databn);
+    // Set `dptr` to point to the relevant data block number.
+    // This is either a pointer into an indirect block, or a
+    // pointer to one of the `ino->direct` entries.
+    if (iptr) {
+        if (*iptr != 0) {
+            ie = bc.get_disk_entry(*iptr);
+        }
+        if (!ie) {
+            goto done;
+        }
+        dptr = reinterpret_cast<blocknum_t*>(ie->buf_)
+            + chickadeefs::bi_direct_index(bi);
+    } else {
+        dptr = &ino->direct[chickadeefs::bi_direct_index(bi)];
     }
 
-    // clean up
-    return reinterpret_cast<unsigned char*>(data);
+    // Finally, load the data block.
+    if (*dptr != 0) {
+        de = bc.get_disk_entry(*dptr);
+    }
+
+ done:
+    // We don't need the indirect and doubly-indirect entries.
+    bc.put_entry(ie);
+    bc.put_entry(i2e);
+    return de ? reinterpret_cast<unsigned char*>(de->buf_) : nullptr;
 }
 
 

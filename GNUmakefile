@@ -47,7 +47,7 @@ KERNEL_OBJS = $(OBJDIR)/k-exception.ko \
 	$(OBJDIR)/k-memviewer.ko $(OBJDIR)/lib.ko $(OBJDIR)/k-vfs.ko \
 	$(OBJDIR)/k-initfs.ko
 
-PROCESS_LIB_OBJS = $(OBJDIR)/lib.o $(OBJDIR)/p-lib.o
+PROCESS_LIB_OBJS = $(OBJDIR)/lib.o $(OBJDIR)/p-lib.o $(OBJDIR)/crc32c.co
 PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-allocator.o \
 	$(OBJDIR)/p-allocexit.o \
@@ -69,6 +69,7 @@ PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-testvfs.o \
 	$(OBJDIR)/p-testwaitpid.o \
 	$(OBJDIR)/p-testwritefs.o \
+	$(OBJDIR)/p-testwritefs2.o \
 	$(OBJDIR)/p-testzombie.o \
 	$(OBJDIR)/p-true.o \
 	$(OBJDIR)/p-wc.o \
@@ -96,6 +97,7 @@ INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~'
 	obj/p-testvfs \
 	obj/p-testwaitpid \
 	obj/p-testwritefs \
+	obj/p-testwritefs2 \
 	obj/p-testzombie \
 	obj/p-true \
 	obj/p-wc \
@@ -128,7 +130,10 @@ endif
 
 # How to make object files
 
-$(PROCESS_OBJS): $(OBJDIR)/%.o: %.cc $(BUILDSTAMPS)
+$(filter %.o,$(PROCESS_OBJS)): $(OBJDIR)/%.o: %.cc $(BUILDSTAMPS)
+	$(call cxxcompile,$(CXXFLAGS) -O1 -DCHICKADEE_PROCESS -c $< -o $@,COMPILE $<)
+
+$(OBJDIR)/%.co: %.cc $(BUILDSTAMPS)
 	$(call cxxcompile,$(CXXFLAGS) -O1 -DCHICKADEE_PROCESS -c $< -o $@,COMPILE $<)
 
 $(OBJDIR)/%.ko: %.cc $(KERNELBUILDSTAMPS)
@@ -222,7 +227,10 @@ chickadeefs.img: $(OBJDIR)/mkchickadeefs \
 	$(call run,$(OBJDIR)/mkchickadeefs -b 32768 -f 16 -s $(OBJDIR)/bootsector $(OBJDIR)/kernel $(DISKFS_CONTENTS) > $@,CREATE $@)
 
 cleanfs:
-	rm -f chickadeefs.img
+	$(call run,rm -f chickadeefs.img,RM chickadeefs.img)
+
+fsck: chickadeefs.img $(OBJDIR)/chickadeefsck
+	$(call run,$(OBJDIR)/chickadeefsck $< && echo "* File system OK",FSCK $<)
 
 
 # How to run QEMU
