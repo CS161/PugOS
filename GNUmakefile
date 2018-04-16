@@ -43,7 +43,7 @@ KERNEL_OBJS = $(OBJDIR)/k-exception.ko \
 	$(OBJDIR)/kernel.ko $(OBJDIR)/k-alloc.ko $(OBJDIR)/k-vmiter.ko \
 	$(OBJDIR)/k-init.ko $(OBJDIR)/k-hardware.ko $(OBJDIR)/k-mpspec.ko \
 	$(OBJDIR)/k-devices.ko $(OBJDIR)/k-cpu.ko $(OBJDIR)/k-proc.ko \
-	$(OBJDIR)/crc32c.ko $(OBJDIR)/k-chkfs.ko \
+	$(OBJDIR)/crc32c.ko $(OBJDIR)/k-chkfs.ko $(OBJDIR)/k-chkfsiter.ko \
 	$(OBJDIR)/k-memviewer.ko $(OBJDIR)/lib.ko $(OBJDIR)/k-vfs.ko \
 	$(OBJDIR)/k-initfs.ko
 
@@ -66,6 +66,7 @@ PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-testpipe.o \
 	$(OBJDIR)/p-testppid.o \
 	$(OBJDIR)/p-testrwaddr.o \
+	$(OBJDIR)/p-testthread.o \
 	$(OBJDIR)/p-testvfs.o \
 	$(OBJDIR)/p-testwaitpid.o \
 	$(OBJDIR)/p-testwritefs.o \
@@ -94,6 +95,7 @@ INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~'
 	obj/p-testpipe \
 	obj/p-testppid \
 	obj/p-testrwaddr \
+	obj/p-testthread \
 	obj/p-testvfs \
 	obj/p-testwaitpid \
 	obj/p-testwritefs \
@@ -224,7 +226,7 @@ chickadeeboot.img: $(OBJDIR)/mkchickadeefs $(OBJDIR)/bootsector $(OBJDIR)/kernel
 chickadeefs.img: $(OBJDIR)/mkchickadeefs \
 	$(OBJDIR)/bootsector $(OBJDIR)/kernel $(DISKFS_CONTENTS) \
 	$(DISKFS_BUILDSTAMP)
-	$(call run,$(OBJDIR)/mkchickadeefs -b 32768 -f 16 -s $(OBJDIR)/bootsector $(OBJDIR)/kernel $(DISKFS_CONTENTS) > $@,CREATE $@)
+	$(call run,$(OBJDIR)/mkchickadeefs -b 32768 -f 16 -j 64 -s $(OBJDIR)/bootsector $(OBJDIR)/kernel $(DISKFS_CONTENTS) > $@,CREATE $@)
 
 cleanfs:
 	$(call run,rm -f chickadeefs.img,RM chickadeefs.img)

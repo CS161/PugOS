@@ -59,6 +59,9 @@ struct bufcache {
     bool load_disk_block(size_t i, chickadeefs::blocknum_t bn);
     bufentry* find_entry(void* data);
 
+    void get_write(bufentry* e);
+    void put_write(bufentry* e);
+
     int sync(bool drop);
 
  private:
@@ -88,6 +91,8 @@ struct chkfsstate {
     unsigned char* get_data_block(inode* ino, size_t off);
 
     inode* lookup_inode(inode* dirino, const char* name);
+
+    blocknum_t allocate_block();
 
 
   private:
