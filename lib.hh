@@ -160,6 +160,7 @@ inline uint32_t crc32c(const void* buf, size_t sz) {
 #define SYSCALL_MSLEEP          9
 #define SYSCALL_GETPPID         10
 #define SYSCALL_WAITPID         11
+#define SYSCALL_MAP_SCREEN      12
 #define SYSCALL_COMMIT_SEPPUKU  44
 #define SYSCALL_LOG_PRINTF      69
 #define SYSCALL_GETTICKS        77

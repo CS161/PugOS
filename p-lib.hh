@@ -282,6 +282,13 @@ static inline int sys_map_console(void* addr) {
     return syscall0(SYSCALL_MAP_CONSOLE, reinterpret_cast<uintptr_t>(addr));
 }
 
+// sys_map_screen(addr)
+//    Map screen memory to addr in process' virtual memory. Returns -1 on
+//    failure.
+static inline int sys_map_screen(void* addr) {
+    return syscall0(SYSCALL_MAP_SCREEN, reinterpret_cast<uintptr_t>(addr));
+}
+
 // sys_commit_seppuku()
 //    Die an honorable death
 static inline int sys_commit_seppuku() {

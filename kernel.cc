@@ -2,6 +2,7 @@
 #include "k-apic.hh"
 #include "k-chkfs.hh"
 #include "k-devices.hh"
+#include "k-gfx.hh"
 #include "k-vfs.hh"
 #include "k-vmiter.hh"
 
@@ -526,6 +527,19 @@ uintptr_t proc::syscall(regstate* regs) {
         }
         if (vmiter(this, addr).map(ktext2pa(console), PTE_P|PTE_W|PTE_U) < 0) {
             break;
+        }
+        r = 0;
+        break;
+    }
+
+    case SYSCALL_MAP_SCREEN: {
+        uintptr_t addr = regs->reg_rdi;
+
+        int vm_r;
+        for (auto off = 0; off < SCREEN_MEMSIZE; off += PAGESIZE) {
+            vm_r = vmiter(this, addr + off).map(SCREEN_MEMBASE + off,
+                                                PTE_P|PTE_W|PTE_U);
+            assert(vm_r >= 0);
         }
         r = 0;
         break;
