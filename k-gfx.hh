@@ -9,7 +9,7 @@
 
 #define s_width 320
 #define s_height 200
-#define s_depth 4			// 16 colors
+#define s_depth 8			// 16 colors
 #define SCREEN_MEMSIZE (s_width * s_height * s_depth / 8)
 
 // how many bytes of VRAM you should skip to go one pixel right

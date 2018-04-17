@@ -11,7 +11,13 @@ void process_main() {
 	unsigned char* screen = reinterpret_cast<unsigned char*>(0x600000);
 	sys_map_screen(screen);
 
-	screen[0] = 0b1010'1010;
+	for (unsigned color = 0; color < 256; ++color) {
+		for (int i = 0; i < s_height; i++) {
+			screen[s_width * i + color] = color;
+		}
+	}
+
+
 	// screen[s_width * s_height] = 0b1010'1010;
 	// for (unsigned i = 0; i < SCREEN_MEMSIZE; ++i) {
 	// 	screen[i] = -1;
