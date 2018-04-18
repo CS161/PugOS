@@ -305,7 +305,7 @@ size_t vnode_inode::write(uintptr_t buf, size_t sz, size_t& off) {
             assert(e);
             bc.get_write(e);
 
-            size_t bsz = min(i_->size - blockoff, fs.blocksize);
+            size_t bsz = min(sz, fs.blocksize);
             size_t boff = off - blockoff;
             if (bsz > boff) {
                 ncopy = bsz - boff;
@@ -327,6 +327,7 @@ size_t vnode_inode::write(uintptr_t buf, size_t sz, size_t& off) {
         }
         nwritten += ncopy;
         off += ncopy;
+        i_->size += ncopy;
         sz -= ncopy;
     }
 

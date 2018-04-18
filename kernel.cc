@@ -857,11 +857,14 @@ uintptr_t proc::syscall(regstate* regs) {
         fdtable_->fds_[fd] = f;
         fdtable_->lock_.unlock(irqs);
 
-        // if (flags & OF_TRUNC) {
-        //     irqs = memfile::lock_.lock();
-        //     m->len_ = 0;
-        //     memfile::lock_.unlock(irqs);
-        // }
+        if (flags & OF_TRUNC && flags & OF_WRITE) {
+            irqs = f->lock_.lock();
+            f->off_ = 0;
+            f->lock_.unlock(irqs);
+            ino->lock_write();
+            ino->size = 0;
+            ino->unlock_write();
+        }
 
         f->readable_ = flags & OF_READ;
         f->writeable_ = flags & OF_WRITE;

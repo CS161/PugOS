@@ -27,6 +27,7 @@ struct bufentry {
     bool was_prefetched_ = false;
 
     list_links entry_link_;
+    list_links dirty_link_;
 
     enum {
         f_loaded = 1, f_loading = 2, f_dirty = 4
@@ -48,6 +49,7 @@ struct bufcache {
     bufentry e_[ne];
     list<bufentry, &bufentry::entry_link_> e_list_;
     list<bufentry, &bufentry::entry_link_> pref_list_;
+    list<bufentry, &bufentry::dirty_link_> dirty_list_;
 
 
     static inline bufcache& get();

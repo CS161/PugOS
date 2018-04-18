@@ -307,6 +307,9 @@ void bufcache::get_write(bufentry* e) {
             return e->write_ref_ == 0;
         }, e->lock_, irqs);
     e->write_ref_ = 1;
+    if (!e->dirty_) {
+        dirty_list_.push_front(e);
+    }
     e->dirty_ = true;
     e->lock_.unlock(irqs);
 }
@@ -330,56 +333,22 @@ void bufcache::put_write(bufentry* e) {
 //    blocks, if `drop` is true.
 
 int bufcache::sync(bool drop) {
-    // Write dirty buffers to disk: your code here!
-
-    for (size_t i = 0; i != ne; ++i) {
-        if (e_[i].dirty_) {
-            get_write(&e_[i]);
-            int r = sata_disk->write(e_[i].buf_,
-                                     chickadeefs::blocksize,
-                                     e_[i].bn_ * chickadeefs::blocksize,
-                                     &e_[i].fetch_status_);
-            assert(r >= 0);
-            put_write(&e_[i]);
-
-            e_[i].dirty_ = false;
-        }
+    // Write dirty buffers to disk
+    // Swap list to local copy to prevent new entries being added during sync
+    list<bufentry, &bufentry::dirty_link_> temp_dirty;
+    temp_dirty.swap(dirty_list_);
+    while (bufentry* e = temp_dirty.pop_front()) {
+        get_write(e);
+        int r = sata_disk->write(e->buf_, chickadeefs::blocksize,
+                e->bn_ * chickadeefs::blocksize, &e->fetch_status_);
+        auto irqs = e->lock_.lock();
+        e->flags_ &= ~bufentry::f_dirty;
+        e->lock_.unlock(irqs);
+        put_write(e);
     }
 
     if (drop) {
         auto irqs = lock_.lock();
-
-        // for (auto b = e_list_.front(); b; b = e_list_.next(b)) {
-        //     auto index = (reinterpret_cast<uintptr_t>(b) -
-        //               reinterpret_cast<uintptr_t>(&e_)) / sizeof(bufentry);
-        //     if (index >= ne) {
-        //         log_printf("DANGEROUS BLOCK: %p\n", b);
-        //     }
-        // }
-
-        // for (auto b = e_list_.front(); b; b = e_list_.next(b)) {
-
-        //     auto i = (reinterpret_cast<uintptr_t>(b) -
-        //       reinterpret_cast<uintptr_t>(&e_)) / sizeof(bufentry);
-
-        //     log_printf("sync hitting b=%p (i: %d)\n", b, i);
-        //     if (b && !b->ref_) {
-        //         e_list_.erase(b);
-        //         kfree(b->buf_);
-        //         b->clear();
-        //     }
-        // }
-
-        // for (auto b = pref_list_.front(); b; b = pref_list_.next(b)) {
-        //     if (b->was_prefetched_ && b->fetch_status_ != E_AGAIN) {
-        //         pref_list_.erase(b);
-        //         kfree(b->buf_);
-        //         b->clear();
-        //     }
-        // }
-
-
-
 
         for (size_t i = 0; i != ne; ++i) {
             if (!e_[i].was_prefetched_ && e_[i].bn_ != emptyblock
