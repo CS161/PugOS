@@ -334,3 +334,10 @@ size_t vnode_inode::write(uintptr_t buf, size_t sz, size_t& off) {
     i_->unlock_write();
     return nwritten;
 }
+
+size_t vnode_inode::size() {
+    i_->lock_read();
+    auto r = i_->size;
+    i_->unlock_read();
+    return r;
+}

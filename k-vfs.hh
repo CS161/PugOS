@@ -44,6 +44,9 @@ struct vnode {
     virtual size_t write(uintptr_t buf, size_t sz, size_t& off) {
         return E_PERM;
     };
+    virtual size_t size() {
+        return E_PERM;
+    }
 
     vnode() : bb_(nullptr), refs_(1) { };
     ~vnode();
@@ -118,6 +121,7 @@ struct vnode_inode : vnode {
 
     size_t read(uintptr_t buf, size_t sz, size_t& off) override;
     size_t write(uintptr_t buf, size_t sz, size_t& off) override;
+    size_t size() override;
 
   private:
     chickadeefs::inode* i_;

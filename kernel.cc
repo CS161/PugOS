@@ -355,6 +355,20 @@ bool validate_memory(T* addr, size_t sz = 0, int perms = 0) {
 }
 
 
+// validate_fd(fd)
+//    Returns 0 if it's valid, or the error number if not
+//    MUST BE CALLED WITH fdtable_.lock HELD
+
+int validate_fd(int fd, fdtable* fdt) {
+    if (fd < 0 || fd >= NFDS || fdt->fds_[fd] == nullptr) {
+        return E_BADF;
+    }
+    else {
+        return 0;
+    }
+}
+
+
 // check_string_termination(str, max_len)
 //    Checks if a string terminates within max_len characters. Returns <0 if not
 //    or the length of the string if it does.
@@ -1093,19 +1107,65 @@ uintptr_t proc::syscall(regstate* regs) {
         return chickadeefs_read_file_data(filename, buf, sz, off);
     }
 
-    // oh god why
-    case SYSCALL_MEMSET: {
-        void* v = reinterpret_cast<void*>(regs->reg_rdi + 0xFFFFFFFF80000000);
-        int c = (int) regs->reg_rsi;
-        size_t n = (size_t) regs->reg_rdx;
-
-        memset(v, c, n);
-        r = 0;
+    case SYSCALL_SYNC: {
+        r = bufcache::get().sync(regs->reg_rdi != 0);
         break;
     }
 
-    case SYSCALL_SYNC: {
-        r = bufcache::get().sync(regs->reg_rdi != 0);
+    case SYSCALL_LSEEK: {
+        int fd = regs->reg_rdi;
+        ssize_t off = regs->reg_rsi;
+        int origin = regs->reg_rdx;
+
+        auto irqs = fdtable_->lock_.lock();
+        int fd_r = validate_fd(fd, fdtable_);
+        if (fd_r < 0) {
+            fdtable_->lock_.unlock(irqs);
+            r = fd_r;
+            break;
+        }
+
+        auto f = fdtable_->fds_[fd];
+        f->lock_.lock_noirq();
+        fdtable_->lock_.unlock_noirq();
+
+        // only normie types are seekable
+        if (f->type_ != file::normie) {
+            f->lock_.unlock(irqs);
+            r = E_SPIPE;
+            break;
+        }
+
+        ssize_t new_off;
+        // sets the file position to off
+        if (origin == LSEEK_SET) {
+            new_off = off;
+        }
+        // adjusts the file position by off
+        else if (origin == LSEEK_CUR) {
+            new_off = (ssize_t) f->off_ + off;
+        }
+        // sets the file position to the end of the file plus off
+        else if (origin == LSEEK_END) {
+            new_off = (ssize_t) f->vnode_->size() + off;
+        }
+        // returns the file’s size without changing the position (off ignored)
+        else if (origin == LSEEK_SIZE) {
+            r = f->vnode_->size();
+            f->lock_.unlock(irqs);
+            break;
+        }
+        else {
+            f->lock_.unlock(irqs);
+            r = E_INVAL;
+            break;
+        }
+
+        // negative file offsets make no sense
+        f->off_ = (size_t) max(new_off, (ssize_t) 0);
+
+        r = f->off_;
+        f->lock_.unlock(irqs);
         break;
     }
 
