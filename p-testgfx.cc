@@ -11,9 +11,9 @@ void process_main() {
 	unsigned char* screen = reinterpret_cast<unsigned char*>(0x600000);
 	sys_map_screen(screen);
 
-	for (unsigned color = 0; color < 256; ++color) {
-		for (int i = 0; i < s_height; i++) {
-			screen[s_width * i + color] = color;
+	for (unsigned x = 0; x < 256; ++x) {
+		for (unsigned y = 0; y < s_height; y++) {
+			screen[PPOS(x, y)] = x;
 		}
 	}
 
