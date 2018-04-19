@@ -118,6 +118,7 @@ struct vnode_memfile : vnode {
 
 struct vnode_inode : vnode {
     vnode_inode(chickadeefs::inode* i) : i_(i) { };
+    ~vnode_inode();
 
     size_t read(uintptr_t buf, size_t sz, size_t& off) override;
     size_t write(uintptr_t buf, size_t sz, size_t& off) override;

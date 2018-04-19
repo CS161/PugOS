@@ -248,6 +248,12 @@ size_t vnode_memfile::write(uintptr_t buf, size_t sz, size_t& off) {
     return n;
 }
 
+
+
+vnode_inode::~vnode_inode() {
+    chkfsstate::get().put_inode(i_);
+}
+
 size_t vnode_inode::read(uintptr_t buf, size_t sz, size_t& off) {
     auto& bc = bufcache::get();
     auto& fs = chkfsstate::get();
