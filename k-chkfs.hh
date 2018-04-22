@@ -2,7 +2,6 @@
 #define CHICKADEE_K_CHKFS_HH
 #include "kernel.hh"
 #include "chickadeefs.hh"
-#include "k-list.hh"
 #include "k-lock.hh"
 #include "k-wait.hh"
 
@@ -16,24 +15,20 @@ struct bufentry {
                                      // and initial setting of `buf_`
     blocknum_t bn_ = emptyblock;     // disk block number or `emptyblock`
     unsigned ref_ = 0;               // refcount: protects entry
+    unsigned write_ref_ = 0;         // write refcount: protect during writes
     unsigned flags_ = 0;             // flags
     void* buf_ = nullptr;            // memory buffer used for entry
 
-    bool dirty_ = false;
-    unsigned write_ref_ = 0;         // write refcount
-    wait_queue write_wq_;
-
-    volatile int fetch_status_ = 0;
-    bool was_prefetched_ = false;
-
     list_links entry_link_;
     list_links dirty_link_;
+    volatile int fetch_status_ = 0;
+    bool prefetched_ = false;
 
     enum {
         f_loaded = 1, f_loading = 2, f_dirty = 4
     };
 
-
+    inline bool loadeding();
     inline void clear();
 };
 
@@ -51,25 +46,28 @@ struct bufcache {
     list<bufentry, &bufentry::entry_link_> pref_list_;
     list<bufentry, &bufentry::dirty_link_> dirty_list_;
 
-
     static inline bufcache& get();
 
     typedef void (*clean_block_function)(void*);
+
+    int get_bufentry_slot(chickadeefs::blocknum_t bn, irqstate& irqs);
+    bool load_disk_block(size_t i, chickadeefs::blocknum_t bn);
+
     bufentry* get_disk_entry(blocknum_t bn, clean_block_function = nullptr);
     void put_entry(bufentry* e);
 
     inline void* get_disk_block(blocknum_t bn, clean_block_function = nullptr);
     inline void put_block(void* pg);
 
-    size_t find_bufentry_slot(chickadeefs::blocknum_t bn, irqstate& irqs);
-    bool load_disk_block(size_t i, chickadeefs::blocknum_t bn);
     bufentry* find_entry(void* data);
 
     void get_write(bufentry* e);
     void put_write(bufentry* e);
 
     int sync(bool drop);
-    void sully(bufentry* e, bool lock = true);
+
+    void visualize();
+    void sully(bufentry* e);
 
  private:
     static bufcache bc;
@@ -111,14 +109,16 @@ struct chkfsstate {
     NO_COPY_OR_ASSIGN(chkfsstate);
 };
 
+inline bool bufentry::loadeding() {
+    return (flags_ & f_loaded) || (flags_ & f_loading);
+}
 
 inline void bufentry::clear() {
     bn_ = emptyblock;
     assert(ref_ == 0);
     flags_ = 0;
     buf_ = nullptr;
-    was_prefetched_ = false;
-    dirty_ = false;
+    prefetched_ = false;
 }
 
 inline bufcache& bufcache::get() {
@@ -128,7 +128,7 @@ inline bufcache& bufcache::get() {
 // bufcache::get_disk_block, bufcache::put_block
 //    Wrapper functions around get_disk_entry and put_entry.
 inline void* bufcache::get_disk_block(blocknum_t bn,
-                                          clean_block_function cleaner) {
+                                      clean_block_function cleaner) {
     auto e = get_disk_entry(bn, cleaner);
     return e ? e->buf_ : nullptr;
 }

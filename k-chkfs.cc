@@ -18,14 +18,10 @@ bufcache::bufcache() {
 }
 
 
-// bufcache::find_bufentry_slot(bn, cleaner)
-//    Read disk block `bn` into the buffer cache, obtain a reference to it,
-//    and return a pointer to its bufentry. The function may block. If this
-//    function reads the disk block from disk, and `cleaner != nullptr`,
-//    then `cleaner` is called on the block data. Returns `nullptr` if
-//    there's no room for the block.
-
-size_t bufcache::find_bufentry_slot(chickadeefs::blocknum_t bn, irqstate& irqs){
+// bufcache::get_bufentry_slot(bn)
+//      Returns the index to an open slot in the buffer cache if one can be
+//      found.
+int bufcache::get_bufentry_slot(chickadeefs::blocknum_t bn, irqstate& irqs) {
     // look for slot containing `bn`
     size_t i;
     for (i = 0; i != ne; ++i) {
@@ -50,9 +46,9 @@ size_t bufcache::find_bufentry_slot(chickadeefs::blocknum_t bn, irqstate& irqs){
         // search for 0 ref block in lru list
         if (i == ne) {
             for (auto b = e_list_.front(); b; b = e_list_.next(b)) {
-                if (b->ref_ == 0 && !b->dirty_) {
+                if (b->ref_ == 0 && !(b->flags_ & bufentry::f_dirty)) {
                     i = (reinterpret_cast<uintptr_t>(b) -
-                         reinterpret_cast<uintptr_t>(&e_)) / sizeof(bufentry);
+                        reinterpret_cast<uintptr_t>(&e_[0])) / sizeof(bufentry);
                     e_list_.erase(b);
                     kfree(b->buf_);
                     b->clear();
@@ -64,9 +60,11 @@ size_t bufcache::find_bufentry_slot(chickadeefs::blocknum_t bn, irqstate& irqs){
         // search for unused prefetches
         if (i == ne) {
             for (auto b = pref_list_.front(); b; b = pref_list_.next(b)) {
-                if (b->was_prefetched_ && b->fetch_status_ != E_AGAIN) {
+                if (b->prefetched_ && b->fetch_status_ != E_AGAIN &&
+                    !(b->flags_ & bufentry::f_dirty)) {
+                    // log_printf("Evicting block %d from prefetch.\n", b->bn_);
                     i = (reinterpret_cast<uintptr_t>(b) -
-                         reinterpret_cast<uintptr_t>(&e_)) / sizeof(bufentry);
+                    reinterpret_cast<uintptr_t>(&e_[0])) / sizeof(bufentry);
                     // log_printf("Evicting bn %d from slot %d\n", b->bn_, i);
                     pref_list_.erase(b);
                     kfree(b->buf_);
@@ -76,44 +74,52 @@ size_t bufcache::find_bufentry_slot(chickadeefs::blocknum_t bn, irqstate& irqs){
             }
         }
 
+        //  found nothing :(
         if (i == ne) {
             // log_printf("Failed to find a slot...\n");
-            // int counter = 0;
-            // log_printf("BNs in bufcache ");
-            // for (int j = 0; j < ne; j++) {
-            //     log_printf("%d:%d ", e_[j].bn_, e_[j].ref_);
-            //     counter++;
-            // }
-            // log_printf("\n");
-            // log_printf("LRU queue ");
-            // for (auto b = e_list_.front(); b; b = e_list_.next(b)) {
-            //     log_printf("%d ", b->bn_);
-            // }
-            // log_printf("\n");
-            // log_printf("Prefetch queue ");
-            // for (auto b = pref_list_.front(); b; b = pref_list_.next(b)) {
-            //     log_printf("%d ", b->bn_);
-            // }
-            // log_printf("\n\n");
-
+            // visualize();
             return -1;
         }
-        
     }
 
     e_[i].bn_ = bn;
-    // log_printf("find_bufentry_slot pushing %p\n", &e_[i]);
     e_list_.push_back(&e_[i]);
     return i;
 }
 
 
+// bufcache::visualize()
+//      Prints out a visualization of the buffer cache, the LRU queue (eviction)
+//      and the prefetch queue.
+void bufcache::visualize() {
+    log_printf("\n");
+    int counter = 0;
+    log_printf("BNs in bufcache ");
+    for (size_t j = 0; j < ne; j++) {
+        log_printf("%d:%d ", e_[j].bn_, e_[j].ref_);
+        counter++;
+    }
+    log_printf("\n");
+    log_printf("LRU queue ");
+    for (auto b = e_list_.front(); b; b = e_list_.next(b)) {
+        log_printf("%d ", b->bn_);
+    }
+    log_printf("\n");
+    log_printf("Prefetch queue ");
+    for (auto b = pref_list_.front(); b; b = pref_list_.next(b)) {
+        log_printf("%d ", b->bn_);
+    }
+    log_printf("\n\n");
+}
+
+
+// bufcache::load_disk_block(i, bn)
+//    Starts the load from the disk to the bufcache if necessary
 bool bufcache::load_disk_block(size_t i, chickadeefs::blocknum_t bn) {
     auto irqs = e_[i].lock_.lock();
 
     // load already done/in progress
-    if ((e_[i].flags_ & bufentry::f_loading)
-          || (e_[i].flags_ & bufentry::f_loaded)) {
+    if (e_[i].loadeding()) {
         e_[i].lock_.unlock(irqs);
         return true;
     }
@@ -132,60 +138,61 @@ bool bufcache::load_disk_block(size_t i, chickadeefs::blocknum_t bn) {
     int r = sata_disk->read_nonblocking(e_[i].buf_, chickadeefs::blocksize,
                                         bn * chickadeefs::blocksize,
                                         &e_[i].fetch_status_);
-
     if (!r) {
         e_[i].flags_ &= ~bufentry::f_loading;
+        return false;
     }
-    return r;
+
+    return true;
 }
 
 
-// bufcache::get_disk_block(bn, cleaner)
+// bufcache::get_disk_entry(bn, cleaner)
 //    Read disk block `bn` into the buffer cache, obtain a reference to it,
-//    and return a pointer to its data. The function may block. If this
+//    and return a pointer to its bufentry. The function may block. If this
 //    function reads the disk block from disk, and `cleaner != nullptr`,
 //    then `cleaner` is called on the block data. Returns `nullptr` if
 //    there's no room for the block.
 
 bufentry* bufcache::get_disk_entry(chickadeefs::blocknum_t bn,
-                               clean_block_function cleaner) {
+                                   clean_block_function cleaner) {
     assert(chickadeefs::blocksize == PAGESIZE);
     auto irqs = lock_.lock();
     bool prefetching = bn != SUPERBLOCK_BN;
-    bool prefetch_resolved = false;
+    bool prefetching_done = false;
 
-    auto i = find_bufentry_slot(bn, irqs);
-    if (i == (size_t) -1) {
+    // look for slot containing `bn`
+    int i = get_bufentry_slot(bn, irqs);
+    if (i < 0) {
         lock_.unlock(irqs);
         log_printf("bufcache: no room for block %u\n", bn);
+        // visualize();
         return nullptr;
     }
-    // debug_printf("get_disk_block %d\n", bn);
 
     // mark reference
     if (bn != SUPERBLOCK_BN) {
         ++e_[i].ref_;
     }
 
-    // only prefetch if we're loading the block for the first time
-    if ((e_[i].flags_ & bufentry::f_loaded)
-          || (e_[i].flags_ & bufentry::f_loading)) {
+    if (e_[i].loadeding()) {
         prefetching = false;
     }
 
     lock_.unlock(irqs);
+
     if (!load_disk_block(i, bn) && sata_disk) {
         log_printf("bufcache: load disk block bn=%d -> slot i=%d failed\n",
-            bn, i);
+                   bn, i);
         return nullptr;
     }
 
     if (prefetching && n_prefetch) {
-        for (unsigned n = 1; n <= n_prefetch; ++n) {
+        for (size_t n = 1; n <= n_prefetch; n++) {
             irqs = lock_.lock();
             debug_printf("attempting prefetch of block %d\n", bn + n);
-            auto pref_i = find_bufentry_slot(bn + n, irqs);
-            if (pref_i == (size_t) -1) {
+            int pref_i = get_bufentry_slot(bn + n, irqs);
+            if (pref_i == -1) {
                 lock_.unlock(irqs);
                 debug_printf("\tprefetch failed, no space in bufcache\n");
                 break;
@@ -196,9 +203,8 @@ bufentry* bufcache::get_disk_entry(chickadeefs::blocknum_t bn,
                 debug_printf("\tblock not in cache, doing first load\n");
                 // move block to prefetch list
                 e_list_.erase(&e_[pref_i]);
-                // log_printf("swapping to pref_list %p\n", &e_[pref_i]);
                 pref_list_.push_front(&e_[pref_i]);
-                e_[pref_i].was_prefetched_ = true;
+                e_[pref_i].prefetched_ = true;
             }
             lock_.unlock(irqs);
 
@@ -210,53 +216,39 @@ bufentry* bufcache::get_disk_entry(chickadeefs::blocknum_t bn,
     }
 
     irqs = sata_disk->lock_.lock();
-    while (e_[i].fetch_status_ == E_AGAIN) {
+    while(e_[i].fetch_status_ == E_AGAIN) {
         waiter(current()).block_until(sata_disk->wq_, [&] () {
-                return e_[i].fetch_status_ != E_AGAIN;
-            }, sata_disk->lock_, irqs);
+            return e_[i].fetch_status_ != E_AGAIN;
+        }, sata_disk->lock_, irqs);
     }
     sata_disk->lock_.unlock(irqs);
 
+    // switch lock to entry lock
     irqs = e_[i].lock_.lock();
-    if (e_[i].flags_ & bufentry::f_loading) {
-        debug_printf("disk load completed\n");
 
+    if (e_[i].flags_ & bufentry::f_loading) {
         if (e_[i].fetch_status_ == E_IO) {
             // SEND HELP
             log_printf("EORAGJIESRKVKSEOIRGJO:EFKWACAE\n");
         }
-        
+
         e_[i].flags_ = (e_[i].flags_ & ~bufentry::f_loading)
             | bufentry::f_loaded;
+
         if (cleaner) {
             cleaner(e_[i].buf_);
         }
-        if (e_[i].was_prefetched_) {
+        if (e_[i].prefetched_) {
             debug_printf("detected completed prefetch\n");
-            prefetch_resolved = true;
-            e_[i].was_prefetched_ = false;
+            pref_list_.erase(&e_[i]);
+            e_list_.push_back(&e_[i]);
+            e_[i].prefetched_ = false;
+            prefetching_done = true;
         }
     }
 
     e_[i].lock_.unlock(irqs);
-
-    if (prefetch_resolved) {
-        irqs = lock_.lock();
-        pref_list_.erase(&e_[i]);
-        // log_printf("prefetch resolution pushing %p\n", &e_[i]);
-        e_list_.push_back(&e_[i]);
-        lock_.unlock(irqs);
-    }
-
-
-    // for (auto b = e_list_.front(); b; b = e_list_.next(b)) {
-    //     auto index = (reinterpret_cast<uintptr_t>(b) -
-    //               reinterpret_cast<uintptr_t>(&e_)) / sizeof(bufentry);
-    //     if (index >= ne) {
-    //         log_printf("DANGEROUS BLOCK: %p\n", b);
-    //     }
-    // }
-
+    // visualize();
     return &e_[i];
 }
 
@@ -295,11 +287,6 @@ void bufcache::put_entry(bufentry* e) {
         // drop reference
         if (e->bn_ != SUPERBLOCK_BN) {
             --e->ref_;
-            // if (e_[i].ref_ == 0) {
-            //     e_list_.erase(&e_[i]);
-            //     kfree(e_[i].buf_);
-            //     e_[i].clear();
-            // }
         }
         e->lock_.unlock(irqs);
     }
@@ -311,12 +298,11 @@ void bufcache::put_entry(bufentry* e) {
 
 void bufcache::get_write(bufentry* e) {
     auto irqs = e->lock_.lock();
-
     waiter(current()).block_until(read_wq_, [&] () {
-            return e->write_ref_ == 0;
-        }, e->lock_, irqs);
-    e->write_ref_ = 1;
-    sully(e, false);
+        return e->write_ref_ == 0;
+    }, e->lock_, irqs);
+    e->write_ref_++;
+    sully(e);
     e->lock_.unlock(irqs);
 }
 
@@ -326,7 +312,7 @@ void bufcache::get_write(bufentry* e) {
 
 void bufcache::put_write(bufentry* e) {
     auto irqs = e->lock_.lock();
-    --e->write_ref_;
+    e->write_ref_--;
     e->lock_.unlock(irqs);
 
     read_wq_.wake_all();
@@ -334,22 +320,12 @@ void bufcache::put_write(bufentry* e) {
 
 
 // bufcache::sully(e)
-//    Marks the entry as dirty and adds it to the dirty list.
-//    MUST BE CALLED WITH e->lock_ HELD
-void bufcache::sully(bufentry* e, bool lock) {
-    irqstate irqs;
-    if (lock) {
-        irqs = e->lock_.lock();
-    }
-
-    if (!e->dirty_) {
+//      Marks the entry as dirty and adds it to the dirty list.
+void bufcache::sully(bufentry* e) {
+    if (!(e->flags_ & bufentry::f_dirty)) {
         dirty_list_.push_front(e);
     }
-    e->dirty_ = true;
-
-    if (lock) {
-        e->lock_.unlock(irqs);
-    }
+    e->flags_ |= bufentry::f_dirty;
 }
 
 
@@ -373,13 +349,17 @@ int bufcache::sync(bool drop) {
         put_write(e);
     }
 
+    // drop entries with ref = 0
     if (drop) {
         auto irqs = lock_.lock();
-
         for (size_t i = 0; i != ne; ++i) {
-            if (!e_[i].was_prefetched_ && e_[i].bn_ != emptyblock
-                  && !e_[i].ref_) {
-                e_list_.erase(&e_[i]);
+            if (e_[i].bn_ != emptyblock && !e_[i].ref_) {
+                if (e_[i].prefetched_) {
+                    pref_list_.erase(&e_[i]);
+                }
+                else {
+                    e_list_.erase(&e_[i]);
+                }
                 kfree(e_[i].buf_);
                 e_[i].clear();
             }
@@ -494,7 +474,7 @@ chickadeefs::inode* chkfsstate::get_inode(inum_t inum) {
     }
     if (ino != nullptr) {
         ino += inum % chickadeefs::inodesperblock;
-        ++ino->mref;
+        ino->mref++;
     }
     return ino;
 }
@@ -504,7 +484,7 @@ chickadeefs::inode* chkfsstate::get_inode(inum_t inum) {
 //    Drop the reference to `ino`.
 void chkfsstate::put_inode(inode* ino) {
     if (ino) {
-        --ino->mref;
+        ino->mref--;
         if (ino->mref <= 0) {
             bufcache::get().put_block(ROUNDDOWN(ino, PAGESIZE));
         }
@@ -619,42 +599,36 @@ chickadeefs::inode* chkfsstate::lookup_inode(inode* dirino,
 auto chkfsstate::allocate_block() -> blocknum_t {
     auto& bc = bufcache::get();
 
-    // load superblock
     unsigned char* superblock_data = reinterpret_cast<unsigned char*>
         (bc.get_disk_block(0));
     assert(superblock_data);
     auto sb = reinterpret_cast<chickadeefs::superblock*>
         (&superblock_data[chickadeefs::superblock_offset]);
 
-    // load free block bitmap
-    auto fbb_e = bc.get_disk_entry(sb->fbb_bn);
-    assert(fbb_e);
-    auto fbb = reinterpret_cast<unsigned char*>(fbb_e->buf_);
+    // get bitmap from free block bitmap block
+    auto fbb_entry = bc.get_disk_entry(sb->fbb_bn);
+    unsigned char* fbb = reinterpret_cast<unsigned char*>
+        (fbb_entry->buf_);
 
-    auto nblocks = sb->nblocks;
-    bc.put_block(superblock_data);
-    bc.put_block(sb);
-
-    // find and mark a free block
-    bc.get_write(fbb_e);
+    bc.get_write(fbb_entry);
     blocknum_t bn;
-    for (bn = 0; bn < nblocks; ++bn) {
+    for (bn = 0; bn < sb->nblocks; bn++) {
         if (fbb[bn / 8] & (1 << (bn % 8))) {
             fbb[bn / 8] &= ~(1 << (bn % 8));
             break;
         }
     }
 
-    bc.put_write(fbb_e);
+    bc.put_block(sb);
+    bc.put_write(fbb_entry);
     bc.put_block(fbb);
-    if (bn == nblocks) {
-        return E_NOSPC;
-    }
-    else {
+    if (bn < sb->nblocks) {
         return bn;
     }
+    else {
+        return E_NOSPC;
+    }
 }
-
 
 // chkfsstate::find_empty_inode()
 //      Traverses the arrays of inode entries until it finds an empty entry.
@@ -689,7 +663,9 @@ ssize_t chkfsstate::find_empty_inode() {
         chickadeefs::inode* ino_curr = &ino[inum % chickadeefs::inodesperblock];
         if (ino_curr->type == 0) {
             // mark the inode entry as dirty
+            auto irqs = e->lock_.lock();
             bc.sully(e);
+            e->lock_.unlock(irqs);
             bc.put_entry(e);
             return inum;
         }
