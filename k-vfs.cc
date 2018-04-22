@@ -318,27 +318,34 @@ size_t vnode_inode::write(uintptr_t buf, size_t sz, size_t& off) {
         size_t blockoff = ROUNDDOWN(off, fs.blocksize);
 
         if (void* data = fs.get_data_block(i_, blockoff)) {
-            // find bufentry for this data block
-            bufentry* e = bc.find_entry(data);
-            assert(e);
-            bc.get_write(e);
 
-            size_t block_end = ROUNDDOWN(off, fs.blocksize) + fs.blocksize;
+            size_t block_end = blockoff + fs.blocksize;
             if (off + sz > block_end) {
                 ncopy = fs.blocksize - (off % fs.blocksize);
                 // allocate another block for this file and put it in the inode
-                it.find(block_end);
-                // assert(!it.present());
-                int r = it.map(fs.allocate_block());
-                assert(r == 0);
+                if (!fs.get_data_block(i_, block_end)) {
+                    it.find(block_end);
+                    auto new_b = fs.allocate_block();
+                    assert(new_b != (chkfsstate::blocknum_t) E_NOSPC);
+                    int r = it.map(new_b);
+                    assert(r == 0 && "map new block failed");
+                }
             }
             else {
                 ncopy = sz;
             }
 
+            // find bufentry for this data block
+            bufentry* e = bc.find_entry(data);
+            assert(e);
+            bc.get_write(e);
+
+            // write data
+            auto irqs = e->lock_.lock();
             memcpy(reinterpret_cast<unsigned char*>(data) + (off - blockoff),
                    reinterpret_cast<unsigned char*>(buf) + nwritten,
                    ncopy);
+            e->lock_.unlock(irqs);
 
             bc.put_write(e);
             bc.put_block(data);

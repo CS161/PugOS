@@ -174,7 +174,9 @@ bufentry* bufcache::get_disk_entry(chickadeefs::blocknum_t bn,
     }
 
     lock_.unlock(irqs);
-    if (!load_disk_block(i, bn)) {
+    if (!load_disk_block(i, bn) && sata_disk) {
+        log_printf("bufcache: load disk block bn=%d -> slot i=%d failed\n",
+            bn, i);
         return nullptr;
     }
 
@@ -314,10 +316,7 @@ void bufcache::get_write(bufentry* e) {
             return e->write_ref_ == 0;
         }, e->lock_, irqs);
     e->write_ref_ = 1;
-    if (!e->dirty_) {
-        dirty_list_.push_front(e);
-    }
-    e->dirty_ = true;
+    defile(e, false);
     e->lock_.unlock(irqs);
 }
 
@@ -331,6 +330,26 @@ void bufcache::put_write(bufentry* e) {
     e->lock_.unlock(irqs);
 
     read_wq_.wake_all();
+}
+
+
+// bufcache::defile(e)
+//    Marks the entry as dirty and adds it to the dirty list.
+//    MUST BE CALLED WITH e->lock_ HELD
+void bufcache::defile(bufentry* e, bool lock) {
+    irqstate irqs;
+    if (lock) {
+        irqs = e->lock_.lock();
+    }
+
+    if (!e->dirty_) {
+        dirty_list_.push_front(e);
+    }
+    e->dirty_ = true;
+
+    if (lock) {
+        e->lock_.unlock(irqs);
+    }
 }
 
 
@@ -426,6 +445,10 @@ void inode::lock_write() {
         current()->yield();
         v = 0;
     }
+
+    // mark inode block as dirty
+    auto& bc = bufcache::get();
+    bc.defile(bc.find_entry(this));
 }
 
 void inode::unlock_write() {
@@ -666,8 +689,7 @@ ssize_t chkfsstate::find_empty_inode() {
         chickadeefs::inode* ino_curr = &ino[inum % chickadeefs::inodesperblock];
         if (ino_curr->type == 0) {
             // mark the inode entry as dirty
-            bc.get_write(e);
-            bc.put_write(e);
+            bc.defile(e);
             bc.put_entry(e);
             return inum;
         }
