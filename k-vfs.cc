@@ -283,7 +283,7 @@ size_t vnode_inode::read(uintptr_t buf, size_t sz, size_t& off) {
                 ncopy = i_->size - off;
             }
             memcpy(reinterpret_cast<unsigned char*>(buf) + nread,
-                   reinterpret_cast<unsigned char*>(data) + off,
+                   reinterpret_cast<unsigned char*>(data) + (off - blockoff),
                    ncopy);
             bc.put_block(data);
         }
@@ -336,7 +336,7 @@ size_t vnode_inode::write(uintptr_t buf, size_t sz, size_t& off) {
                 ncopy = sz;
             }
 
-            memcpy(reinterpret_cast<unsigned char*>(data) + off,
+            memcpy(reinterpret_cast<unsigned char*>(data) + (off - blockoff),
                    reinterpret_cast<unsigned char*>(buf) + nwritten,
                    ncopy);
 
