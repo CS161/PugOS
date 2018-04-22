@@ -69,7 +69,7 @@ struct bufcache {
     void put_write(bufentry* e);
 
     int sync(bool drop);
-    void defile(bufentry* e, bool lock = true);
+    void sully(bufentry* e, bool lock = true);
 
  private:
     static bufcache bc;

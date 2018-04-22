@@ -316,7 +316,7 @@ void bufcache::get_write(bufentry* e) {
             return e->write_ref_ == 0;
         }, e->lock_, irqs);
     e->write_ref_ = 1;
-    defile(e, false);
+    sully(e, false);
     e->lock_.unlock(irqs);
 }
 
@@ -333,10 +333,10 @@ void bufcache::put_write(bufentry* e) {
 }
 
 
-// bufcache::defile(e)
+// bufcache::sully(e)
 //    Marks the entry as dirty and adds it to the dirty list.
 //    MUST BE CALLED WITH e->lock_ HELD
-void bufcache::defile(bufentry* e, bool lock) {
+void bufcache::sully(bufentry* e, bool lock) {
     irqstate irqs;
     if (lock) {
         irqs = e->lock_.lock();
@@ -448,7 +448,7 @@ void inode::lock_write() {
 
     // mark inode block as dirty
     auto& bc = bufcache::get();
-    bc.defile(bc.find_entry(this));
+    bc.sully(bc.find_entry(this));
 }
 
 void inode::unlock_write() {
@@ -689,7 +689,7 @@ ssize_t chkfsstate::find_empty_inode() {
         chickadeefs::inode* ino_curr = &ino[inum % chickadeefs::inodesperblock];
         if (ino_curr->type == 0) {
             // mark the inode entry as dirty
-            bc.defile(e);
+            bc.sully(e);
             bc.put_entry(e);
             return inum;
         }
