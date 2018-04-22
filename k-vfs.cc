@@ -1,4 +1,5 @@
 #include "kernel.hh"
+#include "k-chkfsiter.hh"
 #include "k-devices.hh"
 #include "k-vfs.hh"
 
@@ -266,18 +267,24 @@ size_t vnode_inode::read(uintptr_t buf, size_t sz, size_t& off) {
 
         // read inode contents, copy data
         size_t blockoff = ROUNDDOWN(off, fs.blocksize);
+        // log_printf("\n\nblockoff %d\n", blockoff);
         if (void* data = fs.get_data_block(i_, blockoff)) {
-            size_t bsz = min(i_->size - blockoff, fs.blocksize);
-            size_t boff = off - blockoff;
-            if (bsz > boff) {
-                ncopy = bsz - boff;
-                if (ncopy > sz) {
-                    ncopy = sz;
-                }
-                memcpy(reinterpret_cast<unsigned char*>(buf) + nread,
-                       reinterpret_cast<unsigned char*>(data) + boff,
-                       ncopy);
+            size_t block_end = ROUNDDOWN(off, fs.blocksize) + fs.blocksize;
+            if (off + sz > block_end) {
+                ncopy = fs.blocksize - (off % fs.blocksize);
             }
+            else {
+                ncopy = sz;
+            }
+            // log_printf("sz %d, ncopy %d, block_end %d\n", sz, ncopy, block_end);
+
+            // don't read more data than there is
+            if (ncopy > i_->size - off) {
+                ncopy = i_->size - off;
+            }
+            memcpy(reinterpret_cast<unsigned char*>(buf) + nread,
+                   reinterpret_cast<unsigned char*>(data) + off,
+                   ncopy);
             bc.put_block(data);
         }
 
@@ -289,7 +296,6 @@ size_t vnode_inode::read(uintptr_t buf, size_t sz, size_t& off) {
         off += ncopy;
         sz -= ncopy;
     }
-
     i_->unlock_read();
     return nread;
 }
@@ -299,6 +305,10 @@ size_t vnode_inode::write(uintptr_t buf, size_t sz, size_t& off) {
     auto& fs = chkfsstate::get();
 
     i_->lock_write();
+    chkfs_fileiter it(i_);
+
+    size_t start_size = i_->size;
+    size_t start_sz = sz;
 
     size_t nwritten = 0;
     while (sz > 0) {
@@ -306,22 +316,29 @@ size_t vnode_inode::write(uintptr_t buf, size_t sz, size_t& off) {
 
         // read inode contents, copy data
         size_t blockoff = ROUNDDOWN(off, fs.blocksize);
+
         if (void* data = fs.get_data_block(i_, blockoff)) {
-            auto e = bc.find_entry(data);
+            // find bufentry for this data block
+            bufentry* e = bc.find_entry(data);
             assert(e);
             bc.get_write(e);
 
-            size_t bsz = min(sz, fs.blocksize);
-            size_t boff = off - blockoff;
-            if (bsz > boff) {
-                ncopy = bsz - boff;
-                if (ncopy > sz) {
-                    ncopy = sz;
-                }
-                memcpy(reinterpret_cast<unsigned char*>(data) + boff,
-                       reinterpret_cast<unsigned char*>(buf) + nwritten,
-                       ncopy);
+            size_t block_end = ROUNDDOWN(off, fs.blocksize) + fs.blocksize;
+            if (off + sz > block_end) {
+                ncopy = fs.blocksize - (off % fs.blocksize);
+                // allocate another block for this file and put it in the inode
+                it.find(block_end);
+                // assert(!it.present());
+                int r = it.map(fs.allocate_block());
+                assert(r == 0);
             }
+            else {
+                ncopy = sz;
+            }
+
+            memcpy(reinterpret_cast<unsigned char*>(data) + off,
+                   reinterpret_cast<unsigned char*>(buf) + nwritten,
+                   ncopy);
 
             bc.put_write(e);
             bc.put_block(data);
@@ -333,10 +350,11 @@ size_t vnode_inode::write(uintptr_t buf, size_t sz, size_t& off) {
         }
         nwritten += ncopy;
         off += ncopy;
-        i_->size += ncopy;
         sz -= ncopy;
+        if (off > i_->size) {
+            i_->size = off;
+        }
     }
-
     i_->unlock_write();
     return nwritten;
 }

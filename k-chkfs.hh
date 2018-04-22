@@ -61,7 +61,7 @@ struct bufcache {
     inline void* get_disk_block(blocknum_t bn, clean_block_function = nullptr);
     inline void put_block(void* pg);
 
-    size_t find_bufentry(chickadeefs::blocknum_t bn);
+    size_t find_bufentry_slot(chickadeefs::blocknum_t bn, irqstate& irqs);
     bool load_disk_block(size_t i, chickadeefs::blocknum_t bn);
     bufentry* find_entry(void* data);
 

@@ -18,14 +18,14 @@ bufcache::bufcache() {
 }
 
 
-// bufcache::find_bufentry(bn, cleaner)
+// bufcache::find_bufentry_slot(bn, cleaner)
 //    Read disk block `bn` into the buffer cache, obtain a reference to it,
 //    and return a pointer to its bufentry. The function may block. If this
 //    function reads the disk block from disk, and `cleaner != nullptr`,
 //    then `cleaner` is called on the block data. Returns `nullptr` if
 //    there's no room for the block.
 
-size_t bufcache::find_bufentry(chickadeefs::blocknum_t bn) {
+size_t bufcache::find_bufentry_slot(chickadeefs::blocknum_t bn, irqstate& irqs){
     // look for slot containing `bn`
     size_t i;
     for (i = 0; i != ne; ++i) {
@@ -38,7 +38,14 @@ size_t bufcache::find_bufentry(chickadeefs::blocknum_t bn) {
     // if not found, look for free slot
     if (i == ne) {
         // search for empty block in cache
-        for (i = 0; i != ne && e_[i].bn_ != emptyblock; ++i) { };
+        for (i = 0; i != ne && e_[i].bn_ != emptyblock; ++i) {
+            if (e_[i].flags_ & bufentry::f_dirty && !e_[i].ref_) {
+                lock_.unlock(irqs);
+                sync(false);
+                irqs = lock_.lock();
+                i = 0;
+            }
+        };
 
         // search for 0 ref block in lru list
         if (i == ne) {
@@ -95,7 +102,7 @@ size_t bufcache::find_bufentry(chickadeefs::blocknum_t bn) {
     }
 
     e_[i].bn_ = bn;
-    // log_printf("find_bufentry pushing %p\n", &e_[i]);
+    // log_printf("find_bufentry_slot pushing %p\n", &e_[i]);
     e_list_.push_back(&e_[i]);
     return i;
 }
@@ -147,7 +154,7 @@ bufentry* bufcache::get_disk_entry(chickadeefs::blocknum_t bn,
     bool prefetching = bn != SUPERBLOCK_BN;
     bool prefetch_resolved = false;
 
-    auto i = find_bufentry(bn);
+    auto i = find_bufentry_slot(bn, irqs);
     if (i == (size_t) -1) {
         lock_.unlock(irqs);
         log_printf("bufcache: no room for block %u\n", bn);
@@ -175,7 +182,7 @@ bufentry* bufcache::get_disk_entry(chickadeefs::blocknum_t bn,
         for (unsigned n = 1; n <= n_prefetch; ++n) {
             irqs = lock_.lock();
             debug_printf("attempting prefetch of block %d\n", bn + n);
-            auto pref_i = find_bufentry(bn + n);
+            auto pref_i = find_bufentry_slot(bn + n, irqs);
             if (pref_i == (size_t) -1) {
                 lock_.unlock(irqs);
                 debug_printf("\tprefetch failed, no space in bufcache\n");
@@ -587,8 +594,42 @@ chickadeefs::inode* chkfsstate::lookup_inode(inode* dirino,
 //    can be distinguished by `blocknum >= blocknum_t(E_MINERROR)`.
 
 auto chkfsstate::allocate_block() -> blocknum_t {
-    // Your code here
-    return E_INVAL;
+    auto& bc = bufcache::get();
+
+    // load superblock
+    unsigned char* superblock_data = reinterpret_cast<unsigned char*>
+        (bc.get_disk_block(0));
+    assert(superblock_data);
+    auto sb = reinterpret_cast<chickadeefs::superblock*>
+        (&superblock_data[chickadeefs::superblock_offset]);
+
+    // load free block bitmap
+    auto fbb_e = bc.get_disk_entry(sb->fbb_bn);
+    assert(fbb_e);
+    auto fbb = reinterpret_cast<unsigned char*>(fbb_e->buf_);
+
+    auto nblocks = sb->nblocks;
+    bc.put_block(superblock_data);
+    bc.put_block(sb);
+
+    // find and mark a free block
+    bc.get_write(fbb_e);
+    blocknum_t bn;
+    for (bn = 0; bn < nblocks; ++bn) {
+        if (fbb[bn / 8] & (1 << (bn % 8))) {
+            fbb[bn / 8] &= ~(1 << (bn % 8));
+            break;
+        }
+    }
+
+    bc.put_write(fbb_e);
+    bc.put_block(fbb);
+    if (bn == nblocks) {
+        return E_NOSPC;
+    }
+    else {
+        return bn;
+    }
 }
 
 
