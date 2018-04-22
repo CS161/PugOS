@@ -99,6 +99,8 @@ struct chkfsstate {
     inode* lookup_inode(inode* dirino, const char* name);
 
     blocknum_t allocate_block();
+    ssize_t find_empty_inode();
+    chickadeefs::dirent* find_empty_direntry(chickadeefs::inode* dirino);
 
 
   private:

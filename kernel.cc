@@ -1,6 +1,7 @@
 #include "kernel.hh"
 #include "k-apic.hh"
 #include "k-chkfs.hh"
+#include "k-chkfsiter.hh"
 #include "k-devices.hh"
 #include "k-vfs.hh"
 #include "k-vmiter.hh"
@@ -800,39 +801,35 @@ uintptr_t proc::syscall(regstate* regs) {
         dirino->unlock_read();
         fs.put_inode(dirino);
 
-        // auto irqs = memfile::lock_.lock();
-        // memfile* m = memfile::initfs_lookup(path);
-
         if (!ino) {
-            if (flags & OF_CREATE) {
-                // TODO: what do you do here???
-                r = E_PERM;
-                break;
+            if (flags & OF_CREATE && flags & OF_WRITE) {
+                // create new empty file with name
+                // allocate an inode
+                size_t ino_num = fs.find_empty_inode();
+                ino = fs.get_inode(ino_num);
+                assert(ino);
+                ino->lock_write();
+                // setup inode metadata
+                ino->type = chickadeefs::type_regular;
+                ino->size = 0;
+                ino->nlink = 1;
 
-                // // create new empty file with name
-                // size_t new_index = -1;
-                // for (size_t i = 0; i < memfile::initfs_size; i++) {
-                //     if (memfile::initfs[i].empty()) {
-                //         new_index = i;
-                //         break;
-                //     }
-                // }
-                // // unless no room, then fault
-                // if (new_index == (size_t) -1) {
-                //     r = E_NOSPC;
-                //     memfile::lock_.unlock(irqs);
-                //     break;
-                // }
+                // allocate and map data block
+                chkfs_fileiter it(ino);
+                size_t data_bn = fs.allocate_block();
+                it.map(data_bn);
+                ino->unlock_write();
 
-                // m = &memfile::initfs[new_index];
-                // auto data = reinterpret_cast<unsigned char*>(kallocpage());
-                // if (!data) {
-                //     memfile::lock_.unlock(irqs);
-                //     r = E_NOMEM;
-                //     break;
-                // }
-                // *m = memfile(path, data, data + PAGESIZE);
-                // created = true;
+                // setup direntry for inode
+                dirino->lock_write();
+                chickadeefs::dirent* dirent = fs.find_empty_direntry(dirino);
+                memcpy(dirent->name, path, path_sz);
+                dirent->inum = ino_num;
+                dirino->unlock_write();
+
+                fs.put_inode(ino);
+
+                created = true;
             }
             else {
                 r = E_NOENT;
@@ -856,12 +853,9 @@ uintptr_t proc::syscall(regstate* regs) {
             fs.put_inode(ino);
             kdelete(f);
             kdelete(v);
-            // if (created) {
-            //     irqs = memfile::lock_.lock();
-            //     kfree(m->data_);
-            //     *m = memfile();
-            //     memfile::lock_.unlock(irqs);
-            // }
+            if (created) {
+                // TODO
+            }
             if (fd == -1)
                 r = E_NFILE;
             else

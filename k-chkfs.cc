@@ -633,6 +633,85 @@ auto chkfsstate::allocate_block() -> blocknum_t {
 }
 
 
+// chkfsstate::find_empty_inode()
+//      Traverses the arrays of inode entries until it finds an empty entry.
+//      Returns the number of the empty inode.
+ssize_t chkfsstate::find_empty_inode() {
+    auto& bc = bufcache::get();
+
+    unsigned char* superblock_data = reinterpret_cast<unsigned char*>
+        (bc.get_disk_block(0));
+    assert(superblock_data);
+    auto sb = reinterpret_cast<chickadeefs::superblock*>
+        (&superblock_data[chickadeefs::superblock_offset]);
+    auto inode_bn = sb->inode_bn;
+    auto ninodes = sb->ninodes;
+    bc.put_block(superblock_data);
+
+    chickadeefs::inode* ino = nullptr;
+    bufentry* e = nullptr;
+    for (ssize_t inum = 0; inum < ninodes; inum++) {
+        // get the next block for inode* array
+        if (inum % chickadeefs::inodesperblock == 0) {
+            e = bc.get_disk_entry(
+                    inode_bn + inum / chickadeefs::inodesperblock,
+                    clean_inode_block);
+            ino = reinterpret_cast<inode*>(e->buf_);
+        }
+        // ignore the null inode and root inode
+        if (inum < 2) {
+            continue;
+        }
+        // if it is an empty inode entry
+        chickadeefs::inode* ino_curr = &ino[inum % chickadeefs::inodesperblock];
+        if (ino_curr->type == 0) {
+            // mark the inode entry as dirty
+            bc.get_write(e);
+            bc.put_write(e);
+            bc.put_entry(e);
+            return inum;
+        }
+    }
+    return 0;
+}
+
+
+// chkfsstate::find_empty_entry()
+//      Traverses the arrays of directory entries until it finds an empty entry.
+//      Returns that empty entry for allocation.
+//      TODO: allocate new block for direntries if last is full
+chickadeefs::dirent* chkfsstate::find_empty_direntry(inode* dirino) {
+    auto& bc = bufcache::get();
+    chkfs_fileiter it(dirino);
+
+    // read directory to find file inode
+    chickadeefs::inum_t in = 0;
+    for (size_t diroff = 0; !in; diroff += blocksize) {
+        bufentry* e;
+        if (!(it.find(diroff).present()
+              && (e = bc.get_disk_entry(it.blocknum())))) {
+            break;
+        }
+        bc.get_write(e);
+
+        size_t bsz = min(dirino->size - diroff, blocksize);
+        auto dirent = reinterpret_cast<chickadeefs::dirent*>(e->buf_);
+        for (unsigned i = 0; i * sizeof(*dirent) < bsz; ++i, ++dirent) {
+            if (!dirent->inum) {
+                bc.put_write(e);
+                bc.put_entry(e);
+                return dirent;
+            }
+        }
+
+        bc.put_write(e);
+        bc.put_entry(e);
+    }
+
+    return nullptr;
+}
+
+
 // chickadeefs_read_file_data(filename, buf, sz, off)
 //    Read up to `sz` bytes, from the file named `filename` in the
 //    disk's root directory, into `buf`, starting at file offset `off`.
