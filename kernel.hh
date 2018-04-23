@@ -524,6 +524,8 @@ inline void proc::unlock_pagetable_read(irqstate&) {
 }
 
 struct disk_loader : public proc::loader {
+    disk_loader() : name_("") { };
+
     static constexpr unsigned namesize = 64;
     char name_[namesize];
 

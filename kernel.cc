@@ -799,7 +799,6 @@ uintptr_t proc::syscall(regstate* regs) {
         auto ino = fs.lookup_inode(dirino, path);
 
         dirino->unlock_read();
-        fs.put_inode(dirino);
 
         if (!ino) {
             if (flags & OF_CREATE && flags & OF_WRITE) {
@@ -832,10 +831,14 @@ uintptr_t proc::syscall(regstate* regs) {
                 created = true;
             }
             else {
+                debug_printf("[%d] sys_open couldn't find file %s\n",
+                    pid_, path);
+                fs.put_inode(dirino);
                 r = E_NOENT;
                 break;
             }
         }
+        fs.put_inode(dirino);
 
         int fd = -1;
         auto irqs = fdtable_->lock_.lock();

@@ -143,4 +143,7 @@ inline chkfsstate& chkfsstate::get() {
 size_t chickadeefs_read_file_data(const char* filename,
                                   void* buf, size_t sz, size_t off);
 
+void visualize_root();
+
+
 #endif

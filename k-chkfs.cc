@@ -774,3 +774,42 @@ size_t chickadeefs_read_file_data(const char* filename,
     fs.put_inode(ino);
     return nread;
 }
+
+
+// visualize_root()
+//      Prints to log the names and sizes of the files in the root of disk
+void visualize_root() {
+    auto& fs = chkfsstate::get();
+    auto& bc = bufcache::get();
+    auto dirino = fs.get_inode(1);
+    assert(dirino);
+    dirino->lock_read();
+    chkfs_fileiter it(dirino);
+
+    log_printf("\nRoot directory visualization.\n");
+    log_printf("-----------------------------\n");
+    // read directory to find file inode
+    chickadeefs::inum_t in = 0;
+    for (size_t diroff = 0; !in; diroff += fs.blocksize) {
+        bufentry* e;
+        if (!(it.find(diroff).present()
+              && (e = bc.get_disk_entry(it.blocknum())))) {
+            break;
+        }
+        bc.get_write(e);
+
+        size_t bsz = min(dirino->size - diroff, fs.blocksize);
+        auto dirent = reinterpret_cast<chickadeefs::dirent*>(e->buf_);
+        for (unsigned i = 0; i * sizeof(*dirent) < bsz; ++i, ++dirent) {
+            auto inum = dirent->inum;
+            auto ino = fs.get_inode(inum);
+            if (ino) {
+                log_printf("%s of size %d\n", dirent->name, ino->size);
+            }
+        }
+
+        bc.put_write(e);
+        bc.put_entry(e);
+    }
+}
+
