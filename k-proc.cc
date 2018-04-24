@@ -4,9 +4,11 @@
 #include "k-devices.hh"
 #include "k-chkfs.hh"
 
-proc* ptable[NPROC];                    // array of process descriptor pointers
-// protects `ptable`, pid_, ppid_, and children_
-spinlock ptable_lock;
+proc* ptable[NPROC];            // array of thread pointers
+proc* true_ptable[NPROC];       // array of process descriptor pointers
+spinlock ptable_lock;           // protects ptable, true_ptable, pid_, ppid_,
+                                //   and children_
+
 
 // proc::proc()
 //    The constructor initializes the `proc` to empty.
@@ -72,6 +74,7 @@ void proc::init_user(pid_t pid, x86_64_pagetable* pt) {
     assert(pt->entry[511] == early_pagetable->entry[511]);
 
     pid_ = pid;
+    true_pid_ = pid;
     canary_ = canary_value;
 
     regs_ = reinterpret_cast<regstate*>(addr + KTASKSTACK_SIZE) - 1;
@@ -99,6 +102,7 @@ void proc::init_kernel(pid_t pid, void (*f)(proc*)) {
     assert(!(addr & PAGEOFFMASK));
 
     pid_ = pid;
+    true_pid_ = pid;
     canary_ = canary_value;
 
     regs_ = reinterpret_cast<regstate*>(addr + KTASKSTACK_SIZE) - 1;

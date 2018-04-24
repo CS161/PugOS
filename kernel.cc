@@ -70,7 +70,8 @@ void kernel_start(const char* command) {
 
 void process_setup(pid_t pid, const char* name) {
     assert(!ptable[pid]);
-    proc* p = ptable[pid] = kalloc_proc();
+    assert(!true_ptable[pid]);
+    proc* p = ptable[pid] = true_ptable[pid] = kalloc_proc();
     x86_64_pagetable* npt = kalloc_pagetable();
     assert(p && npt);
 
@@ -106,7 +107,7 @@ void process_setup(pid_t pid, const char* name) {
     p->children_.reset();
     p->ppid_ = 1;
     if (p->pid_ != 1) {
-        ptable[1]->children_.push_back(p);
+        true_ptable[1]->children_.push_back(p);
     }
 
     int cpu = p->cpu_ = pid % ncpu;
@@ -114,6 +115,28 @@ void process_setup(pid_t pid, const char* name) {
     debug_printf("process_setup enqueueing pid %d\n", p->pid_);
     cpus[cpu].enqueue(p);
     cpus[cpu].runq_lock_.unlock_noirq();
+}
+
+
+unsigned active_threads(proc* p, bool lock = true) {
+    irqstate irqs;
+    if (lock) {
+        irqs = ptable_lock.lock();
+    }
+
+    unsigned r = 0;
+    for (auto i = 0; i < NPROC; ++i) {
+        if (ptable[i] && ptable[i]->pid_ == p->pid_ &&
+                (ptable[i]->state_ == proc::runnable ||
+                 ptable[i]->state_ == proc::blocked)) {
+            ++r;
+        }
+    }
+
+    if (lock) {
+        ptable_lock.unlock(irqs);
+    }
+    return r;
 }
 
 
@@ -177,13 +200,16 @@ void nuke_pagetable(x86_64_pagetable* pt) {
 int process_reap(pid_t pid) {
     auto irqs = ptable_lock.lock();
     proc* p = ptable[pid];
+    auto nthr = active_threads(p, false);
 
-    // erase proc from parent's children
-    ptable[p->ppid_]->children_.erase(p);
+    if (nthr == 0) {
+        // erase proc from parent's children
+        ptable[p->ppid_]->children_.erase(p);
 
-    // wipe everything else
-    kdelete(p->fdtable_);
-    nuke_pagetable(p->pagetable_);
+        // wipe everything else
+        kdelete(p->fdtable_);
+        nuke_pagetable(p->pagetable_);
+    }
     int exit_status = p->exit_status_;
     kfree(p);
     ptable[pid] = nullptr;
@@ -215,7 +241,7 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
     debug_printf("[%d] forking into pid %d\n", ogproc->pid_, fpid);
 
     // allocate proc, store in ptable
-    proc* fproc = ptable[fpid] = kalloc_proc();
+    proc* fproc = ptable[fpid] = true_ptable[fpid] = kalloc_proc();
     if (!fproc) {
         ptable_lock.unlock(irqs);
         return -1;
@@ -227,7 +253,7 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
     x86_64_pagetable* fpt = fproc->pagetable_ = kalloc_pagetable();
     if (!fpt) {
         irqs = ptable_lock.lock();
-        ptable[fpid] = nullptr;
+        ptable[fpid] = true_ptable[fpid] = nullptr;
         kdelete(fproc);
         ptable_lock.unlock(irqs);
         return -1;
@@ -387,6 +413,16 @@ int check_string_termination(const char* str, int max_len) {
 }
 
 
+int get_proc_slot(proc** ptab) {
+    for (int i = 1; i < NPROC; ++i) {
+        if (!ptab[i] || ptab[i]->state_ == proc::blank) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+
 // proc::exception(reg)
 //    Exception handler (for interrupts, traps, and faults).
 //
@@ -492,7 +528,7 @@ uintptr_t proc::syscall(regstate* regs) {
         break;                  // will not be reached
 
     case SYSCALL_GETPID:
-        r = pid_;
+        r = true_pid_;
         break;
 
     case SYSCALL_YIELD:
@@ -577,7 +613,7 @@ uintptr_t proc::syscall(regstate* regs) {
     case SYSCALL_WAITPID: {
         pid_t child_pid = regs->reg_rdi;
         assert(child_pid < NPROC && child_pid >= 0);
-        int options = regs->reg_rsi;
+        int options = regs->reg_rdx;
 
         auto irqs = ptable_lock.lock();
         debug_printf("[%d] sys_waitpid on child pid %d; options %s W_NOHANG"
@@ -1164,6 +1200,62 @@ uintptr_t proc::syscall(regstate* regs) {
         r = f->off_;
         f->lock_.unlock(irqs);
         break;
+    }
+ 
+    case SYSCALL_CLONE: {
+        proc* new_p = kalloc_proc();
+
+        auto irqs = ptable_lock.lock();
+        new_p->ppid_ = ppid_;
+        new_p->yields_ = nullptr;
+        new_p->true_pid_ = true_pid_;
+        new_p->fdtable_ = fdtable_;
+        new_p->state_ = proc::runnable;
+        new_p->pagetable_ = pagetable_;
+        new_p->canary_ = canary_value;
+
+        new_p->pid_ = get_proc_slot(ptable);
+        if (new_p->pid_ < 0) {
+            ptable_lock.unlock(irqs);
+            kfree(new_p);
+            r = -1; // TODO
+            break;
+        }
+        ptable[new_p->pid_] = new_p;
+
+        new_p->regs_ = reinterpret_cast<regstate*>(
+            reinterpret_cast<uintptr_t>(new_p) + KTASKSTACK_SIZE) - 1;
+        *new_p->regs_ = *regs;
+        new_p->regs_->reg_rax = 0;
+
+        ptable_lock.unlock(irqs);
+
+        int cpu = new_p->cpu_ = new_p->pid_ % ncpu;
+        cpus[cpu].runq_lock_.lock_noirq();
+        log_printf("[%d] process_clone enqueueing pid %d\n", pid_, new_p->pid_);
+        cpus[cpu].enqueue(new_p);
+        cpus[cpu].runq_lock_.unlock_noirq();
+
+        r = new_p->pid_;
+        break;
+    }
+
+    case SYSCALL_GETTID:
+        r = pid_;
+        break;
+
+    case SYSCALL_TEXIT: {
+        int status = regs->reg_rdi;
+
+        if (active_threads(this) == 1) {
+            process_exit(this, status);
+        }
+        else {
+            exit_status_ = status;
+            state_ = proc::broken;
+        }
+
+        this->yield_noreturn();
     }
 
     default:

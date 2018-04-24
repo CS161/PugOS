@@ -24,7 +24,7 @@ struct fdtable; // forward declaration
 // Process descriptor type
 struct __attribute__((aligned(4096))) proc {
     // These three members must come first:
-    pid_t pid_;                        // process ID
+    pid_t pid_;                        // thread ID
     regstate* regs_;                   // process's current registers
     yieldstate* yields_;               // process's current yield state
 #if HAVE_SANITIZERS
@@ -44,6 +44,7 @@ struct __attribute__((aligned(4096))) proc {
 
     int cpu_;                          // index of cpu proc is running on
 
+    pid_t true_pid_;                   // actual process ID
     pid_t ppid_;                       // parent process ID
 
     int exit_status_;
@@ -92,6 +93,7 @@ struct __attribute__((aligned(4096))) proc {
 
 #define NPROC 16
 extern proc* ptable[NPROC];
+extern proc* true_ptable[NPROC];
 extern spinlock ptable_lock;
 #define KTASKSTACK_SIZE  4096
 
