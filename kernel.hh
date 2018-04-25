@@ -49,6 +49,7 @@ struct __attribute__((aligned(4096))) proc {
 
     int exit_status_;
     bool interrupted_;
+    bool exiting_;
 
     fdtable* fdtable_;
 

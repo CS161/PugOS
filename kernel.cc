@@ -142,6 +142,25 @@ unsigned active_threads(proc* p, bool lock = true) {
 
 void process_exit(proc* p, int status = 0) {
     p->exit_status_ = status;
+    debug_printf("[%d] process_exit\n", current()->pid_);
+
+    auto irqs = ptable_lock.lock();
+    if (active_threads(p, false) > 1) {
+        debug_printf("[%d] process_exit killing threads", current()->pid_);
+        for (auto i = 0; i < NPROC; ++i) {
+            if (ptable[i] && ptable[i]->true_pid_ == p->true_pid_
+                    && ptable[i]->state_ != proc::broken
+                    && ptable[i]->pid_ != p->pid_){
+                debug_printf(" %d", ptable[i]->pid_);
+                ptable[i]->exiting_ = true;
+            }
+        }
+        debug_printf("\n");
+
+        
+    }
+    ptable_lock.unlock(irqs);
+
 
     // free file descriptors
     for (unsigned i = 0; i < NFDS; i++) {
@@ -151,9 +170,9 @@ void process_exit(proc* p, int status = 0) {
     }
 
     // interrupt parent
-    auto irqs = ptable_lock.lock();
-    debug_printf("[%d] process_exit interrupting parent %d\n",
-                 p->pid_, p->ppid_);
+    irqs = ptable_lock.lock();
+    // debug_printf("[%d] process_exit interrupting parent %d\n",
+    //              p->pid_, p->ppid_);
     auto daddy = ptable[p->ppid_];
     if (daddy && daddy->state_ == proc::blocked) {
         daddy->interrupted_ = true;
@@ -167,7 +186,7 @@ void process_exit(proc* p, int status = 0) {
         ptable[1]->children_.push_back(child);
     }
 
-    debug_printf("[%d] process_exit waking waitpid_wq\n", p->pid_);
+    // debug_printf("[%d] process_exit waking waitpid_wq\n", p->pid_);
     ptable_lock.unlock(irqs);
     waitpid_wq.wake_all();
 

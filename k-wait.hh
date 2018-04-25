@@ -4,10 +4,6 @@
 #include "k-list.hh"
 struct wait_queue;
 
-void debug_printf_(const char* file, const char* func, int line,
-                          const char* format, ...);
-const char* state_string(const proc* p);
-extern volatile unsigned long ticks;
 
 struct waiter {
     proc* p_;
@@ -126,13 +122,24 @@ inline void waiter::wake() {
 }
 
 
+// Forward declaration
+proc* current();
+void log_printf(const char* format, ...);
+
 // waiter::block_until(wq, predicate)
 //    Block on `wq` until `predicate()` returns true.
 template <typename F>
 inline void waiter::block_until(wait_queue& wq, F predicate) {
+    proc* p;
     while (1) {
         prepare(wq);
-        if (predicate()) {
+        p = current();
+        if (p->exiting_) {
+            log_printf("block_until caught exiting thread %d\n", p->pid_);
+            p->state_ = proc::broken;
+            p->yield_noreturn();
+        }
+        else if (predicate()) {
             break;
         }
         block();
