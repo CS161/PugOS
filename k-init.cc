@@ -2,6 +2,7 @@
 #include "lib.hh"
 #include "k-apic.hh"
 #include "k-devices.hh"
+#include "k-gfx.hh"
 #include "elf.h"
 
 // symtab: reference to kernel symbol table; useful for debugging.
@@ -47,7 +48,7 @@ void init_hardware() {
 
     // initialize kernel allocator
     init_kalloc();
-    test_kalloc();
+    // test_kalloc();
 
     // initialize other CPUs
     init_other_processors();
@@ -207,6 +208,9 @@ void init_physical_ranges() {
     physical_ranges.set(PA_IOLOWMIN, PA_IOLOWEND, mem_reserved);
     physical_ranges.set(PA_IOHIGHMIN, PA_IOHIGHEND, mem_reserved);
     physical_ranges.set(ktext2pa(console), ktext2pa(console) + PAGESIZE,
+                        mem_console);
+    // memory mapped screen io space
+    physical_ranges.set(SCREEN_MEMBASE, SCREEN_MEMBASE + SCREEN_MEMSIZE,
                         mem_console);
     // kernel text and data is owned by the kernel
     extern char _low_data_start[], _low_data_end[];

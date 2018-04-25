@@ -108,35 +108,39 @@ void print_all_block_lists() {
 //    Initialize stuff needed by `kalloc`. Called from `init_hardware`,
 //    after `physical_ranges` is initialized.
 void init_kalloc() {
+    log_printf("initializing kalloc... ");
     memset(pages, 0, sizeof(pages));
 
     for (auto range = physical_ranges.begin();
      range->first() < MEMSIZE_PHYSICAL;
      ++range) {
-
         auto addr = range->first();
         while(addr < range->last()) {
             // find the largest buddy-allocation chunk we can make here
             int order = find_max_order(addr, range->last());
-            assert(order > 0);
-            int pindex = addr / PAGESIZE;
-            pages[pindex].order = order;
-            pages[pindex].pindex = pindex;
+            if (order > 0) {
+                int pindex = addr / PAGESIZE;
+                pages[pindex].order = order;
+                pages[pindex].pindex = pindex;
 
-            // is the chunk allocated?
-            if (range->type() == mem_available) {
-                pages[pindex].allocated = false;
-                // add the available block to the free_blocks lists
-                free_blocks(order)->push_back(&pages[pindex]);
+                // is the chunk allocated?
+                if (range->type() == mem_available) {
+                    pages[pindex].allocated = false;
+                    // add the available block to the free_blocks lists
+                    free_blocks(order)->push_back(&pages[pindex]);
+                }
+                else {
+                    pages[pindex].allocated = true;
+                }
+                // move past the chunk we just made
+                addr += 1 << order;
             }
             else {
-                pages[pindex].allocated = true;
+                break;
             }
-
-            // move past the chunk we just made
-            addr += 1 << order;
         }
     }
+    log_printf("finished\n");
 }
 
 // min_larger_order

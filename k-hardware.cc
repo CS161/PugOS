@@ -281,6 +281,27 @@ void panic(const char* format, ...) {
         log_printf("\n");
     }
 
+    // stack trace
+    uintptr_t rsp = read_rsp(), rbp = read_rbp();
+    uintptr_t stack_top = ROUNDUP(rsp, PAGESIZE);
+    int frame = 1;
+    while (rbp >= rsp && rbp < stack_top) {
+        uintptr_t* rbpx = reinterpret_cast<uintptr_t*>(rbp);
+        uintptr_t next_rbp = rbpx[0];
+        uintptr_t ret_rip = rbpx[1];
+        if (!ret_rip) {
+            break;
+        }
+        const char* name;
+        if (lookup_symbol(ret_rip, &name, nullptr)) {
+            error_printf("  #%d  %p  <%s>\n", frame, ret_rip, name);
+        } else {
+            error_printf("  #%d  %p\n", frame, ret_rip);
+        }
+        rbp = next_rbp;
+        ++frame;
+    }
+
     va_end(val);
     fail();
 }

@@ -67,6 +67,10 @@ seta20.2:       inb     $0x64, %al              # Get status
                 movb    $0xdf, %al              # Command: Enable
                 outb    %al, $0x60              #  A20
 
+enable_graphics:
+        movw $0x13, %ax
+        int $0x10
+
 notify_bios64:
         movw $0xEC00, %ax
         movw $2, %dx
