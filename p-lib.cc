@@ -63,6 +63,7 @@ void assert_fail(const char* file, int line, const char* msg) {
 }
 
 
+
 // sys_clone
 //    Create a new thread.
 
@@ -76,6 +77,7 @@ pid_t sys_clone(int (*function)(void*), void* arg, char* stack_top) {
                       :
                       : "cc", "rcx", "rdx", "rsi",
                         "r8", "r9", "r10", "r11");
+        sys_log_printf("sys_clone returned, exit status %d\n", rax);
         sys_texit(rax);
     }
     return r;

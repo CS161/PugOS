@@ -231,19 +231,28 @@ void nuke_pagetable(x86_64_pagetable* pt) {
 int process_reap(pid_t pid) {
     auto irqs = ptable_lock.lock();
     proc* p = ptable[pid];
-    auto nthr = active_threads(p, false);
+    // erase proc from parent's children
+    true_ptable[p->ppid_]->children_.erase(p);
+
+    unsigned nthr = 0;
+    for (pid_t i = 0; i < NPROC; ++i) {
+        if (ptable[i] && ptable[i]->true_pid_ == p->true_pid_
+              && (ptable[i]->state_ == proc::runnable
+                  || ptable[i]->state_ == proc::blocked
+                  || ptable[i]->state_ == proc::broken)) {
+            ++nthr;
+        }
+    }
 
     if (nthr == 0) {
-        // erase proc from parent's children
-        true_ptable[p->ppid_]->children_.erase(p);
-
         // wipe everything else
         kdelete(p->fdtable_);
         nuke_pagetable(p->pagetable_);
     }
+
     int exit_status = p->exit_status_;
     kfree(p);
-    ptable[pid] = nullptr;
+    ptable[pid] = true_ptable[pid] = nullptr;
     ptable_lock.unlock(irqs);
     debug_printf("[%d] reaped pid %d, %d active threads\n",
         current()->pid_, pid, nthr);
@@ -660,6 +669,7 @@ uintptr_t proc::syscall(regstate* regs) {
         ptable_lock.unlock(irqs);
 
         pid_t to_reap = 0;
+        int exit_status = 0;
         if ((child_pid != 0 && pid_ != parent_of_child)
             || (child_pid == 0 && children_.empty())) {
             r = E_CHILD;
@@ -684,13 +694,29 @@ uintptr_t proc::syscall(regstate* regs) {
                 }
                 // wait for a child (child_pid)
                 else {
-                    if (ptable[child_pid]->state_ == proc::broken) {
-                        to_reap = ptable[child_pid]->pid_;
+                    for (pid_t i = 0; i < NPROC; ++i) {
+                        if (ptable[i] && ptable[i]->true_pid_ == child_pid
+                                && ptable[i]->state_ == proc::broken) {
+                            to_reap = ptable[i]->true_pid_;
+                            ptable_lock.unlock(irqs);
+                            auto s = process_reap(i);
+                            irqs = ptable_lock.lock();
+                            if (s != 0) {
+                                exit_status = s;
+                            }
+                        }
+                    }
+                }
+
+                bool no_threads_left = true;
+                for (pid_t i = 0; i < NPROC; ++i) {
+                    if (ptable[i] && ptable[i]->true_pid_ == child_pid) {
+                        no_threads_left = false;
                     }
                 }
 
                 ptable_lock.unlock(irqs);
-                if (to_reap || options == W_NOHANG)
+                if ((to_reap && no_threads_left) || options == W_NOHANG)
                     break;
                 
                 debug_printf("[%d] sys_waitpid blocking\n", pid_);
@@ -705,7 +731,6 @@ uintptr_t proc::syscall(regstate* regs) {
             debug_printf("[%d] sys_waitpid returning E_AGAIN r=%d\n", pid_, r);
         }
         else {
-            int exit_status = process_reap(to_reap);
             asm("movl %0, %%ecx;": : "r" (exit_status) : "ecx");
             r = to_reap;
         }
@@ -1254,6 +1279,8 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
         ptable[new_p->pid_] = new_p;
+
+        true_ptable[new_p->ppid_]->children_.push_back(new_p);
 
         new_p->regs_ = reinterpret_cast<regstate*>(
             reinterpret_cast<uintptr_t>(new_p) + KTASKSTACK_SIZE) - 1;
