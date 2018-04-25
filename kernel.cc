@@ -14,7 +14,7 @@ volatile unsigned long ticks;   // # timer interrupts so far on CPU 0
 timing_wheel sleep_wheel;       // timer wheel to wake on ticks
 int kdisplay;                   // type of display
 
-static wait_queue waitpid_wq;   // waitqueue for sys_waitpid
+wait_queue waitpid_wq;   // waitqueue for sys_waitpid
 
 static void kdisplay_ontick();
 static void process_setup(pid_t pid, const char* program_name);
@@ -140,6 +140,14 @@ unsigned active_threads(proc* p, bool lock = true) {
 }
 
 
+void display_proc(proc* p) {
+    if (p) {
+        debug_printf("ptable[%d] = true_pid_ %d, exiting_ %d, state %s\n",
+            p->pid_, p->true_pid_, p->exiting_, state_string(p));
+    }
+}
+
+
 void process_exit(proc* p, int status = 0) {
     p->exit_status_ = status;
     debug_printf("[%d] process_exit\n", current()->pid_);
@@ -147,32 +155,48 @@ void process_exit(proc* p, int status = 0) {
     auto irqs = ptable_lock.lock();
     if (active_threads(p, false) > 1) {
         // mark all threads as exiting
-        debug_printf("[%d] process_exit killing threads", current()->pid_);
+        debug_printf("[%d] process_exit killing threads...\n", current()->pid_);
         for (auto i = 0; i < NPROC; ++i) {
-            if (ptable[i] && ptable[i]->true_pid_ == p->true_pid_
+            if (ptable[i]
+                    && ptable[i]->true_pid_ == p->true_pid_
                     && ptable[i]->state_ != proc::broken
                     && ptable[i]->pid_ != p->pid_){
-                debug_printf(" %d", ptable[i]->pid_);
+                debug_printf("[%d] process_exit killing %d\n",
+                    p->pid_, ptable[i]->pid_);
                 ptable[i]->exiting_ = true;
             }
+
+            if (ptable[i]) {
+                display_proc(ptable[i]);
+            }
         }
-        debug_printf("\n");
     
         // block until all threads exit
         waiter(current()).block_until(waitpid_wq, [&] () {
                 for (auto i = 0; i < NPROC; ++i) {
-                    if (ptable[i] && ptable[i]->true_pid_ == p->true_pid_
+                    display_proc(ptable[i]);
+
+                    if (ptable[i]
+                            && ptable[i]->true_pid_ == p->true_pid_
                             && ptable[i]->pid_ != p->pid_
-                            && ptable[i]->state_ != proc::broken
-                            && ptable[i]->exiting_ != true){
+                            && ptable[i]->state_ != proc::broken){
+                        if (!ptable[i]->exiting_) {
+                            ptable[i]->exiting_ = true;
+                        }
+                        if (ptable[i]->state_ == proc::blocked) {
+                            ptable[i]->wake();
+                            waitpid_wq.wake_all();
+                        }
                         return false;
                     }
                 }
                 return true;
             }, ptable_lock, irqs);
+
+        debug_printf("[%d] process_exit finished waiting for threads, "
+            "exiting\n", p->pid_);
     }
     ptable_lock.unlock(irqs);
-
 
     // free file descriptors
     for (unsigned i = 0; i < NFDS; i++) {
@@ -236,15 +260,16 @@ int process_reap(pid_t pid) {
 
     unsigned nthr = 0;
     for (pid_t i = 0; i < NPROC; ++i) {
-        if (ptable[i] && ptable[i]->true_pid_ == p->true_pid_
-              && (ptable[i]->state_ == proc::runnable
-                  || ptable[i]->state_ == proc::blocked
-                  || ptable[i]->state_ == proc::broken)) {
+        if (ptable[i]
+                && ptable[i]->true_pid_ == p->true_pid_
+                && (ptable[i]->state_ == proc::runnable
+                    || ptable[i]->state_ == proc::blocked
+                    || ptable[i]->state_ == proc::broken)) {
             ++nthr;
         }
     }
 
-    if (nthr == 0) {
+    if (nthr == 1) {
         // wipe everything else
         kdelete(p->fdtable_);
         nuke_pagetable(p->pagetable_);
@@ -277,8 +302,9 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
     }
     // No free process slot found
     if (fpid < 1) {
+        debug_printf("[%d] sys_fork error no free pid\n");
         ptable_lock.unlock(irqs);
-        return -1;
+        return E_MFILE;
     }
 
     debug_printf("[%d] forking into pid %d\n", ogproc->pid_, fpid);
@@ -287,7 +313,7 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
     proc* fproc = ptable[fpid] = true_ptable[fpid] = kalloc_proc();
     if (!fproc) {
         ptable_lock.unlock(irqs);
-        return -1;
+        return E_NOMEM;
     }
     fproc->state_ = proc::broken;
     ptable_lock.unlock(irqs);
@@ -299,7 +325,7 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
         ptable[fpid] = true_ptable[fpid] = nullptr;
         kdelete(fproc);
         ptable_lock.unlock(irqs);
-        return -1;
+        return E_NOMEM;
     }
 
     // initialize proc data
@@ -313,7 +339,7 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
         kdelete(fproc);
         ptable[fpid] = nullptr;
         ptable_lock.unlock(irqs);
-        return -1;
+        return E_NOMEM;
     }
 
     // clone ogproc's fdtable
@@ -342,7 +368,7 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
             void* npage_ka = kallocpage();
             if (npage_ka == nullptr) {
                 process_reap(fpid);
-                return -1;
+                return E_NOMEM;
             }
             uintptr_t npage_pa = ka2pa(npage_ka);
 
@@ -351,13 +377,13 @@ static pid_t process_fork(proc* ogproc, regstate* ogregs) {
             if (vmiter(fpt, source.va()).map(npage_pa, source.perm()) < 0) {
                 kfree(npage_ka);
                 process_reap(fpid);
-                return -1;
+                return E_NOMEM;
             }
         }
         else if (source.user()) {
             if (vmiter(fpt, source.va()).map(source.pa(), source.perm()) < 0) {
                 process_reap(fpid);
-                return -1;
+                return E_NOMEM;
             }
         }
     }
@@ -680,14 +706,22 @@ uintptr_t proc::syscall(regstate* regs) {
             waiter w(this);
             while (true) {
                 irqs = ptable_lock.lock();
-                // debug_printf("[%d] sys_waitpid preparing\n", pid_);
+                debug_printf("[%d] sys_waitpid preparing\n", pid_);
                 w.prepare(&waitpid_wq);
 
                 // wait for any child
                 if (child_pid == 0) {
                     for (auto p = children_.front(); p; p = children_.next(p)) {
                         if (p->state_ == proc::broken) {
-                            to_reap = p->pid_;
+                            to_reap = p->true_pid_;
+                            ptable_lock.unlock(irqs);
+                            auto s = process_reap(p->pid_);
+                            irqs = ptable_lock.lock();
+                            if (s != 0) {
+                                exit_status = s;
+                            }
+                            debug_printf("[%d] sys_waitpid reaped tid %d, "
+                                "exit_status %d\n", pid_, p->pid_, s);
                             break;
                         }
                     }
@@ -695,7 +729,9 @@ uintptr_t proc::syscall(regstate* regs) {
                 // wait for a child (child_pid)
                 else {
                     for (pid_t i = 0; i < NPROC; ++i) {
-                        if (ptable[i] && ptable[i]->true_pid_ == child_pid
+
+                        if (ptable[i]
+                                && ptable[i]->true_pid_ == child_pid
                                 && ptable[i]->state_ == proc::broken) {
                             to_reap = ptable[i]->true_pid_;
                             ptable_lock.unlock(irqs);
@@ -704,6 +740,8 @@ uintptr_t proc::syscall(regstate* regs) {
                             if (s != 0) {
                                 exit_status = s;
                             }
+                            debug_printf("[%d] sys_waitpid reaped tid %d, "
+                                "exit_status %d\n", pid_, i, s);
                         }
                     }
                 }
@@ -714,6 +752,9 @@ uintptr_t proc::syscall(regstate* regs) {
                         no_threads_left = false;
                     }
                 }
+
+                debug_printf("[%d] sys_waitpid to_reap=%d, %sthreads left\n",
+                    pid_, to_reap, no_threads_left ? "no " : "");
 
                 ptable_lock.unlock(irqs);
                 if ((to_reap && no_threads_left) || options == W_NOHANG)
@@ -731,6 +772,8 @@ uintptr_t proc::syscall(regstate* regs) {
             debug_printf("[%d] sys_waitpid returning E_AGAIN r=%d\n", pid_, r);
         }
         else {
+            debug_printf("[%d] sys_waitpid exit_status=%d\n",
+                pid_, exit_status);
             asm("movl %0, %%ecx;": : "r" (exit_status) : "ecx");
             r = to_reap;
         }
@@ -866,6 +909,7 @@ uintptr_t proc::syscall(regstate* regs) {
         fdtable_->fds_[fd] = nullptr;
         fdtable_->lock_.unlock(irqs);
 
+        debug_printf("[%d] sys_close completed\n", pid_);
         r = 0;
         break;
     }
@@ -1317,6 +1361,7 @@ uintptr_t proc::syscall(regstate* regs) {
             state_ = proc::broken;
         }
 
+        waitpid_wq.wake_all();
         this->yield_noreturn();
     }
 

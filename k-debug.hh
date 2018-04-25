@@ -33,9 +33,10 @@ inline constexpr bool debug_filter(const char* file, const char* func) {
                 // case debug_hash("exception"): return false;
                 case debug_hash("process_exit"): return true;
                 // case debug_hash("process_setup"): return false;
-                // case debug_hash("process_fork"): return true;
+                case debug_hash("process_fork"): return true;
                 case debug_hash("process_reap"): return true;
                 case debug_hash("syscall"): return true;
+                case debug_hash("display_proc"): return true;
                 default: return false;
             }
         case debug_hash("k-proc.cc"): return true;

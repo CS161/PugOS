@@ -148,13 +148,13 @@ void cpustate::schedule(proc* yielding_from) {
     while (1) {
 
         // knock current_ off the cpu queue if it is exiting
-        if (current_ && current_->exiting_) {
-            debug_printf("cpustate::schedule caught exiting thread %d\n",
-                current_->pid_);
-            current_->state_ = proc::broken;
-        }
+        // if (current_ && current_->exiting_) {
+        //     debug_printf("cpustate::schedule caught exiting thread %d\n",
+        //         current_->pid_);
+        //     current_->state_ = proc::broken;
+        // }
         // try to run `current`
-        else if (current_
+        if (current_
             && current_->state_ == proc::runnable
             && current_ != yielding_from) {
             set_pagetable(current_->pagetable_);

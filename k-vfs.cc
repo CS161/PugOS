@@ -12,7 +12,6 @@ vnode::~vnode() {
 
 // file
 
-// returns 1 if it freed itself, 0 if it still exists
 // DO NOT CALL WITH FILE LOCK HELD
 void file::deref() {
 	auto irqs = lock_.lock();
@@ -20,8 +19,9 @@ void file::deref() {
 	assert(refs_ >= 0);
 	auto refs = refs_;
 	lock_.unlock(irqs);
-	if (refs == 0)
+	if (refs == 0) {
 		kdelete(this);
+    }
 }
 
 file::~file() {
@@ -45,6 +45,10 @@ file::~file() {
 	auto refs = vnode_->refs_;
 	vnode_->lock_.unlock(irqs);
 	if (refs == 0) {
+        // irqs = vnode_->bb_->lock_.lock();
+        // vnode_->bb_->nonfull_wq_.q_.reset();
+        // vnode_->bb_->nonempty_wq_.q_.reset();
+        // vnode_->bb_->lock_.unlock(irqs);
 		kdelete(vnode_);
 	}
 }

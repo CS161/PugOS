@@ -60,6 +60,7 @@ PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-readdiskfile.o \
 	$(OBJDIR)/p-sh.o \
 	$(OBJDIR)/p-testeintr.o \
+	$(OBJDIR)/p-testscript.o \
 	$(OBJDIR)/p-testgfx.o \
 	$(OBJDIR)/p-testmemfs.o \
 	$(OBJDIR)/p-testmsleep.o \
@@ -91,6 +92,7 @@ INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~'
 	obj/p-readdiskfile \
 	obj/p-sh \
 	obj/p-testeintr \
+	obj/p-testscript \
 	obj/p-testgfx \
 	obj/p-testmemfs \
 	obj/p-testmsleep \

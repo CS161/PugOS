@@ -4,6 +4,8 @@
 #include "k-list.hh"
 struct wait_queue;
 
+extern wait_queue waitpid_wq;
+
 
 struct waiter {
     proc* p_;
@@ -136,7 +138,9 @@ inline void waiter::block_until(wait_queue& wq, F predicate) {
         p = current();
         if (p->exiting_) {
             log_printf("block_until caught exiting thread %d\n", p->pid_);
+            clear();
             p->state_ = proc::broken;
+            waitpid_wq.wake_all();
             p->yield_noreturn();
         }
         else if (predicate()) {
@@ -172,8 +176,11 @@ inline void waiter::block_until(wait_queue& wq, F predicate,
         prepare(wq);
         p = current();
         if (p->exiting_) {
+            lock.unlock(irqs);
             log_printf("block_until caught exiting thread %d\n", p->pid_);
+            clear();
             p->state_ = proc::broken;
+            waitpid_wq.wake_all();
             p->yield_noreturn();
         }
         else if (predicate()) {

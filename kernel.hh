@@ -90,6 +90,8 @@ struct __attribute__((aligned(4096))) proc {
     static int load_segment(const elf_program& ph, loader& ld);
 };
 
+struct wait_queue;
+extern wait_queue waitpid_wq;
 #include "k-wait.hh"
 
 #define NPROC 16
@@ -423,7 +425,7 @@ void log_vprintf(const char* format, va_list val) __attribute__((noinline));
 void debug_printf_(const char* file, const char* func, int line,
                           const char* format, ...);
 
-#define DEBUG true
+#define DEBUG false
 #include "k-debug.hh"
 
 // log_backtrace
