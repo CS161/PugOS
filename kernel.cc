@@ -126,7 +126,7 @@ unsigned active_threads(proc* p, bool lock = true) {
 
     unsigned r = 0;
     for (auto i = 0; i < NPROC; ++i) {
-        if (ptable[i] && ptable[i]->pid_ == p->pid_ &&
+        if (ptable[i] && ptable[i]->true_pid_ == p->true_pid_ &&
                 (ptable[i]->state_ == proc::runnable ||
                  ptable[i]->state_ == proc::blocked)) {
             ++r;
@@ -214,7 +214,8 @@ int process_reap(pid_t pid) {
     kfree(p);
     ptable[pid] = nullptr;
     ptable_lock.unlock(irqs);
-    debug_printf("[%d] reaped pid %d\n", current()->pid_, pid);
+    debug_printf("[%d] reaped pid %d, %d active threads\n",
+        current()->pid_, pid, nthr);
     return exit_status;
 }
 
@@ -1249,7 +1250,7 @@ uintptr_t proc::syscall(regstate* regs) {
         debug_printf("[%d] sys_texit %d active threads\n",
             pid_, active_threads(this));
 
-        if (active_threads(this) == 0) {
+        if (active_threads(this) == 1) {
             process_exit(this, status);
         }
         else {

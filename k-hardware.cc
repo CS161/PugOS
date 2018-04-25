@@ -38,8 +38,8 @@ x86_64_pagetable* kalloc_pagetable() {
 void set_pagetable(x86_64_pagetable* pagetable) {
     assert(pagetable != nullptr);          // must not be NULL
     if (vmiter(pagetable, HIGHMEM_BASE).pa() != 0) {
-        log_printf("[%d] set_pagetable BAD PT %p\n",
-            current()->pid_, pagetable);
+        log_printf("[%d] set_pagetable BAD PT %p; result=%p\n",
+            current()->pid_, pagetable, vmiter(pagetable, HIGHMEM_BASE).pa());
     }
     assert(vmiter(pagetable, HIGHMEM_BASE).pa() == 0);
     assert(vmiter(pagetable, HIGHMEM_BASE).writable());
