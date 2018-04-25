@@ -203,8 +203,6 @@ int proc::load(loader& ld) {
     // validate the binary
     uint8_t* headerpg;
     ssize_t r = ld.get_page(&headerpg, 0);
-    debug_printf("proc::load: read %d bytes from %p, wanted at least %d\n",
-        r, &headerpg, sizeof(elf_header));
     if (r < 0) {
         goto exit;
     } else if (size_t(r) < sizeof(elf_header)) {

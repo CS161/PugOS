@@ -214,6 +214,7 @@ int process_reap(pid_t pid) {
     kfree(p);
     ptable[pid] = nullptr;
     ptable_lock.unlock(irqs);
+    debug_printf("[%d] reaped pid %d\n", current()->pid_, pid);
     return exit_status;
 }
 
@@ -613,7 +614,7 @@ uintptr_t proc::syscall(regstate* regs) {
     case SYSCALL_WAITPID: {
         pid_t child_pid = regs->reg_rdi;
         assert(child_pid < NPROC && child_pid >= 0);
-        int options = regs->reg_rdx;
+        int options = regs->reg_rsi;
 
         auto irqs = ptable_lock.lock();
         debug_printf("[%d] sys_waitpid on child pid %d; options %s W_NOHANG"
@@ -636,7 +637,7 @@ uintptr_t proc::syscall(regstate* regs) {
             waiter w(this);
             while (true) {
                 irqs = ptable_lock.lock();
-                debug_printf("[%d] sys_waitpid preparing\n", pid_);
+                // debug_printf("[%d] sys_waitpid preparing\n", pid_);
                 w.prepare(&waitpid_wq);
 
                 // wait for any child
@@ -664,15 +665,13 @@ uintptr_t proc::syscall(regstate* regs) {
             }
             w.clear();
         }
-        debug_printf("[%d] sys_waitpid: to_reap pid = %d\n", pid_, to_reap);
+        debug_printf("[%d] sys_waitpid pid to_reap=%d\n", pid_, to_reap);
 
         if (!to_reap && options == W_NOHANG && r != (uintptr_t) E_CHILD) {
             r = E_AGAIN;
             debug_printf("[%d] sys_waitpid returning E_AGAIN r=%d\n", pid_, r);
         }
         else {
-            debug_printf("[%d] sys_waitpid returning pid %d\n",
-                pid_, r);
             int exit_status = process_reap(to_reap);
             asm("movl %0, %%ecx;": : "r" (exit_status) : "ecx");
             r = to_reap;
@@ -723,7 +722,7 @@ uintptr_t proc::syscall(regstate* regs) {
               || (regs->reg_rax == SYSCALL_WRITE && !f->writeable_)) {
             fdtable_->lock_.unlock(irqs);
             r = E_BADF;
-            debug_printf("returning E_PERM\n");
+            debug_printf("\t...returning E_BADF=%d\n", r);
             break;
         }
 
@@ -971,6 +970,7 @@ uintptr_t proc::syscall(regstate* regs) {
 
         fdtable_->lock_.unlock(irqs);
 
+        debug_printf("[%d] sys_pipe successful, r=%d w=%d\n", pid_, rfd, wfd);
         r = rfd | (wfd << 32);
         break;
     }
@@ -1124,7 +1124,6 @@ uintptr_t proc::syscall(regstate* regs) {
         nuke_pagetable(old_pt);
 
         yield_noreturn();
-        break; // never reached
     }
 
     case SYSCALL_READDISKFILE: {
@@ -1232,7 +1231,8 @@ uintptr_t proc::syscall(regstate* regs) {
 
         int cpu = new_p->cpu_ = new_p->pid_ % ncpu;
         cpus[cpu].runq_lock_.lock_noirq();
-        log_printf("[%d] process_clone enqueueing pid %d\n", pid_, new_p->pid_);
+        debug_printf("[%d] sys_clone enqueueing pid %d\n",
+            pid_, new_p->pid_);
         cpus[cpu].enqueue(new_p);
         cpus[cpu].runq_lock_.unlock_noirq();
 
@@ -1246,8 +1246,10 @@ uintptr_t proc::syscall(regstate* regs) {
 
     case SYSCALL_TEXIT: {
         int status = regs->reg_rdi;
+        debug_printf("[%d] sys_texit %d active threads\n",
+            pid_, active_threads(this));
 
-        if (active_threads(this) == 1) {
+        if (active_threads(this) == 0) {
             process_exit(this, status);
         }
         else {
