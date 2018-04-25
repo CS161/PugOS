@@ -167,9 +167,16 @@ inline irqstate waiter::block_until(wait_queue& wq, F predicate,
 template <typename F>
 inline void waiter::block_until(wait_queue& wq, F predicate,
                                 spinlock& lock, irqstate& irqs) {
+    proc* p;
     while (1) {
         prepare(wq);
-        if (predicate()) {
+        p = current();
+        if (p->exiting_) {
+            log_printf("block_until caught exiting thread %d\n", p->pid_);
+            p->state_ = proc::broken;
+            p->yield_noreturn();
+        }
+        else if (predicate()) {
             break;
         }
         lock.unlock(irqs);

@@ -146,6 +146,7 @@ void process_exit(proc* p, int status = 0) {
 
     auto irqs = ptable_lock.lock();
     if (active_threads(p, false) > 1) {
+        // mark all threads as exiting
         debug_printf("[%d] process_exit killing threads", current()->pid_);
         for (auto i = 0; i < NPROC; ++i) {
             if (ptable[i] && ptable[i]->true_pid_ == p->true_pid_
@@ -156,8 +157,19 @@ void process_exit(proc* p, int status = 0) {
             }
         }
         debug_printf("\n");
-
-        
+    
+        // block until all threads exit
+        waiter(current()).block_until(waitpid_wq, [&] () {
+                for (auto i = 0; i < NPROC; ++i) {
+                    if (ptable[i] && ptable[i]->true_pid_ == p->true_pid_
+                            && ptable[i]->pid_ != p->pid_
+                            && ptable[i]->state_ != proc::broken
+                            && ptable[i]->exiting_ != true){
+                        return false;
+                    }
+                }
+                return true;
+            }, ptable_lock, irqs);
     }
     ptable_lock.unlock(irqs);
 
@@ -235,6 +247,7 @@ int process_reap(pid_t pid) {
     ptable_lock.unlock(irqs);
     debug_printf("[%d] reaped pid %d, %d active threads\n",
         current()->pid_, pid, nthr);
+    waitpid_wq.wake_all();
     return exit_status;
 }
 
