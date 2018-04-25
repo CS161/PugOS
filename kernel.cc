@@ -204,7 +204,7 @@ int process_reap(pid_t pid) {
 
     if (nthr == 0) {
         // erase proc from parent's children
-        ptable[p->ppid_]->children_.erase(p);
+        true_ptable[p->ppid_]->children_.erase(p);
 
         // wipe everything else
         kdelete(p->fdtable_);
