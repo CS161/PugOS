@@ -191,10 +191,10 @@ extern volatile unsigned long ticks;     // number of ticks since boot
 #define SEGSEL_TASKSTATE        0x28            // task state segment
 
 
-// Physical memory size
-#define MEMSIZE_PHYSICAL        0x200000
+// Physical memory size (75 MB - about 2 MB used by kernel)
+#define MEMSIZE_PHYSICAL        (75 * 1024 * 1024)
 // Virtual memory size
-#define MEMSIZE_VIRTUAL         0x300000
+#define MEMSIZE_VIRTUAL         MEMSIZE_PHYSICAL
 
 enum memtype_t {
     mem_nonexistent = 0, mem_available = 1, mem_kernel = 2, mem_reserved = 3,

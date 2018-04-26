@@ -609,10 +609,12 @@ uintptr_t proc::syscall(regstate* regs) {
     case SYSCALL_PAGE_ALLOC: {
         uintptr_t addr = regs->reg_rdi;
         if (addr >= VA_LOWEND || addr & 0xFFF) {
+            r = E_INVAL;
             break;
         }
         x86_64_page* pg = kallocpage();
         if (!pg || vmiter(this, addr).map(ka2pa(pg)) < 0) {
+            r = E_NOMEM;
             break;
         }
         r = 0;
