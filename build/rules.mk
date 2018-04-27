@@ -55,6 +55,11 @@ SANITIZEFLAGS := -fsanitize=undefined -fsanitize=kernel-address
 $(OBJDIR)/k-alloc.ko $(OBJDIR)/k-sanitizers.ko: SANITIZEFLAGS :=
 endif
 
+# GFX toggle
+ifeq ($(filter 1,$(GFX)),1)
+KERNELCXXFLAGS += -DGFX
+endif
+
 # Linker flags
 LDFLAGS := $(LDFLAGS) -Os --gc-sections -z max-page-size=0x1000 -static -nostdlib -nostartfiles
 LDFLAGS	+= $(shell $(LD) -m elf_x86_64 --help >/dev/null 2>&1 && echo -m elf_x86_64)
