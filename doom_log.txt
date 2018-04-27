@@ -140,13 +140,6 @@ p-doom.c: In function ‘M_LoadDefaults’:
 p-doom.c:208165:5: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
      (int) newstring;
      ^
-p-doom.c: In function ‘A_KeenDie’:
-p-doom.c:209628:21: error: incompatible type for argument 2 of ‘EV_DoDoor’
-     EV_DoDoor(&junk,open);
-                     ^~~~
-p-doom.c:208805:1: note: expected ‘vldoor_e {aka enum <anonymous>}’ but argument is of type ‘int (*)(const char *, int)’
- EV_DoDoor
- ^~~~~~~~~
 p-doom.c: In function ‘P_ArchivePlayers’:
 p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
  #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
@@ -297,63 +290,6 @@ p-doom.c:216279:6: note: in expansion of macro ‘PADSAVEP’
 p-doom.c:216283:30: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
       glow->sector = &sectors[(int)glow->sector];
                               ^
-p-doom.c: In function ‘P_CrossSpecialLine’:
-p-doom.c:217420:17: error: incompatible type for argument 2 of ‘EV_DoDoor’
-  EV_DoDoor(line,open);
-                 ^~~~
-p-doom.c:208805:1: note: expected ‘vldoor_e {aka enum <anonymous>}’ but argument is of type ‘int (*)(const char *, int)’
- EV_DoDoor
- ^~~~~~~~~
-p-doom.c:217425:17: error: incompatible type for argument 2 of ‘EV_DoDoor’
-  EV_DoDoor(line,close);
-                 ^~~~~
-p-doom.c:208805:1: note: expected ‘vldoor_e {aka enum <anonymous>}’ but argument is of type ‘int (*)(int)’
- EV_DoDoor
- ^~~~~~~~~
-p-doom.c:217670:17: error: incompatible type for argument 2 of ‘EV_DoDoor’
-  EV_DoDoor(line,close);
-                 ^~~~~
-p-doom.c:208805:1: note: expected ‘vldoor_e {aka enum <anonymous>}’ but argument is of type ‘int (*)(int)’
- EV_DoDoor
- ^~~~~~~~~
-p-doom.c:217713:17: error: incompatible type for argument 2 of ‘EV_DoDoor’
-  EV_DoDoor(line,open);
-                 ^~~~
-p-doom.c:208805:1: note: expected ‘vldoor_e {aka enum <anonymous>}’ but argument is of type ‘int (*)(const char *, int)’
- EV_DoDoor
- ^~~~~~~~~
-p-doom.c: In function ‘P_ShootSpecialLine’:
-p-doom.c:217843:17: error: incompatible type for argument 2 of ‘EV_DoDoor’
-  EV_DoDoor(line,open);
-                 ^~~~
-p-doom.c:208805:1: note: expected ‘vldoor_e {aka enum <anonymous>}’ but argument is of type ‘int (*)(const char *, int)’
- EV_DoDoor
- ^~~~~~~~~
-p-doom.c: In function ‘P_UseSpecialLine’:
-p-doom.c:218890:21: error: incompatible type for argument 2 of ‘EV_DoDoor’
-  if (EV_DoDoor(line,close))
-                     ^~~~~
-p-doom.c:208805:1: note: expected ‘vldoor_e {aka enum <anonymous>}’ but argument is of type ‘int (*)(int)’
- EV_DoDoor
- ^~~~~~~~~
-p-doom.c:218920:21: error: incompatible type for argument 2 of ‘EV_DoDoor’
-  if (EV_DoDoor(line,open))
-                     ^~~~
-p-doom.c:208805:1: note: expected ‘vldoor_e {aka enum <anonymous>}’ but argument is of type ‘int (*)(const char *, int)’
- EV_DoDoor
- ^~~~~~~~~
-p-doom.c:218979:21: error: incompatible type for argument 2 of ‘EV_DoDoor’
-  if (EV_DoDoor(line,close))
-                     ^~~~~
-p-doom.c:208805:1: note: expected ‘vldoor_e {aka enum <anonymous>}’ but argument is of type ‘int (*)(int)’
- EV_DoDoor
- ^~~~~~~~~
-p-doom.c:219003:21: error: incompatible type for argument 2 of ‘EV_DoDoor’
-  if (EV_DoDoor(line,open))
-                     ^~~~
-p-doom.c:208805:1: note: expected ‘vldoor_e {aka enum <anonymous>}’ but argument is of type ‘int (*)(const char *, int)’
- EV_DoDoor
- ^~~~~~~~~
 p-doom.c: In function ‘R_InitColormaps’:
 p-doom.c:220441:28: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
      colormaps = (byte *)( ((int)colormaps + 255)&~0xff);
