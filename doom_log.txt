@@ -1,0 +1,342 @@
+p-doom.c: In function ‘AM_updateLightLev’:
+p-doom.c:191274:12: warning: type defaults to ‘int’ in declaration of ‘nexttic’ [-Wimplicit-int]
+     static nexttic = 0;
+            ^~~~~~~
+p-doom.c: In function ‘AM_clipMline’:
+p-doom.c:191318:14: warning: type defaults to ‘int’ in declaration of ‘outcode1’ [-Wimplicit-int]
+     register outcode1 = 0;
+              ^~~~~~~~
+p-doom.c:191319:14: warning: type defaults to ‘int’ in declaration of ‘outcode2’ [-Wimplicit-int]
+     register outcode2 = 0;
+              ^~~~~~~~
+p-doom.c:191320:14: warning: type defaults to ‘int’ in declaration of ‘outside’ [-Wimplicit-int]
+     register outside;
+              ^~~~~~~
+p-doom.c: In function ‘D_DoomMain’:
+p-doom.c:193730:13: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  statcopy = (void*)atoi(myargv[p+1]);
+             ^
+p-doom.c: In function ‘NetbufferSize’:
+p-doom.c:193831:12: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     return (int)&(((doomdata_t *)0)->cmds[netbuffer->numtics]);
+            ^
+p-doom.c: In function ‘NetbufferChecksum’:
+p-doom.c:193842:29: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     l = (NetbufferSize () - (int)&(((doomdata_t *)0)->retransmitfrom))/4;
+                             ^
+p-doom.c: In function ‘xlatekey’:
+p-doom.c:199659:5: warning: ‘XKeycodeToKeysym’ is deprecated [-Wdeprecated-declarations]
+     switch(rc = XKeycodeToKeysym(X_display, X_event.xkey.keycode, 0))
+     ^~~~~~
+In file included from p-doom.c:199631:0:
+/usr/include/X11/Xlib.h:1687:15: note: declared here
+ extern KeySym XKeycodeToKeysym(
+               ^~~~~~~~~~~~~~~~
+p-doom.c: In function ‘grabsharedmemory’:
+p-doom.c:200154:4: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+    (int) (image->data));
+    ^
+p-doom.c: In function ‘Expand4’:
+p-doom.c:200409:28: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff0000)>>13) );
+                            ^
+p-doom.c:200409:16: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff0000)>>13) );
+                ^
+p-doom.c:200415:28: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff)<<3 ) );
+                            ^
+p-doom.c:200415:16: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff)<<3 ) );
+                ^
+p-doom.c:200422:28: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff0000)>>13) );
+                            ^
+p-doom.c:200422:16: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff0000)>>13) );
+                ^
+p-doom.c:200428:28: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff)<<3 ) );
+                            ^
+p-doom.c:200428:16: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff)<<3 ) );
+                ^
+p-doom.c:200435:28: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff0000)>>13) );
+                            ^
+p-doom.c:200435:16: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff0000)>>13) );
+                ^
+p-doom.c:200441:28: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff)<<3 ) );
+                            ^
+p-doom.c:200441:16: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff)<<3 ) );
+                ^
+p-doom.c:200448:28: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff0000)>>13) );
+                            ^
+p-doom.c:200448:16: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff0000)>>13) );
+                ^
+p-doom.c:200454:28: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff)<<3 ) );
+                            ^
+p-doom.c:200454:16: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+      dpixel = *(double *)( (int)exp + ( (fourpixels&0xffff)<<3 ) );
+                ^
+p-doom.c: At top level:
+p-doom.c:208071:45: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     {"chatmacro0", (int *) &chat_macros[0], (int) HUSTR_CHATMACRO0 },
+                                             ^
+p-doom.c:208071:45: error: initializer element is not constant
+p-doom.c:208071:45: note: (near initialization for ‘defaults[17].defaultvalue’)
+p-doom.c:208072:45: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     {"chatmacro1", (int *) &chat_macros[1], (int) HUSTR_CHATMACRO1 },
+                                             ^
+p-doom.c:208072:45: error: initializer element is not constant
+p-doom.c:208072:45: note: (near initialization for ‘defaults[18].defaultvalue’)
+p-doom.c:208073:45: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     {"chatmacro2", (int *) &chat_macros[2], (int) HUSTR_CHATMACRO2 },
+                                             ^
+p-doom.c:208073:45: error: initializer element is not constant
+p-doom.c:208073:45: note: (near initialization for ‘defaults[19].defaultvalue’)
+p-doom.c:208074:45: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     {"chatmacro3", (int *) &chat_macros[3], (int) HUSTR_CHATMACRO3 },
+                                             ^
+p-doom.c:208074:45: error: initializer element is not constant
+p-doom.c:208074:45: note: (near initialization for ‘defaults[20].defaultvalue’)
+p-doom.c:208075:45: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     {"chatmacro4", (int *) &chat_macros[4], (int) HUSTR_CHATMACRO4 },
+                                             ^
+p-doom.c:208075:45: error: initializer element is not constant
+p-doom.c:208075:45: note: (near initialization for ‘defaults[21].defaultvalue’)
+p-doom.c:208076:45: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     {"chatmacro5", (int *) &chat_macros[5], (int) HUSTR_CHATMACRO5 },
+                                             ^
+p-doom.c:208076:45: error: initializer element is not constant
+p-doom.c:208076:45: note: (near initialization for ‘defaults[22].defaultvalue’)
+p-doom.c:208077:45: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     {"chatmacro6", (int *) &chat_macros[6], (int) HUSTR_CHATMACRO6 },
+                                             ^
+p-doom.c:208077:45: error: initializer element is not constant
+p-doom.c:208077:45: note: (near initialization for ‘defaults[23].defaultvalue’)
+p-doom.c:208078:45: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     {"chatmacro7", (int *) &chat_macros[7], (int) HUSTR_CHATMACRO7 },
+                                             ^
+p-doom.c:208078:45: error: initializer element is not constant
+p-doom.c:208078:45: note: (near initialization for ‘defaults[24].defaultvalue’)
+p-doom.c:208079:45: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     {"chatmacro8", (int *) &chat_macros[8], (int) HUSTR_CHATMACRO8 },
+                                             ^
+p-doom.c:208079:45: error: initializer element is not constant
+p-doom.c:208079:45: note: (near initialization for ‘defaults[25].defaultvalue’)
+p-doom.c:208080:45: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     {"chatmacro9", (int *) &chat_macros[9], (int) HUSTR_CHATMACRO9 }
+                                             ^
+p-doom.c:208080:45: error: initializer element is not constant
+p-doom.c:208080:45: note: (near initialization for ‘defaults[26].defaultvalue’)
+p-doom.c: In function ‘M_LoadDefaults’:
+p-doom.c:208165:5: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     (int) newstring;
+     ^
+p-doom.c: In function ‘P_ArchivePlayers’:
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:215844:2: note: in expansion of macro ‘PADSAVEP’
+  PADSAVEP();
+  ^~~~~~~~
+p-doom.c: In function ‘P_UnArchivePlayers’:
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:215868:2: note: in expansion of macro ‘PADSAVEP’
+  PADSAVEP();
+  ^~~~~~~~
+p-doom.c:215881:18: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+       = &states[ (int)players[i].psprites[j].state ];
+                  ^
+p-doom.c: In function ‘P_ArchiveThinkers’:
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:215992:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c: In function ‘P_UnArchiveThinkers’:
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216039:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:216043:28: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      mobj->state = &states[(int)mobj->state];
+                            ^
+p-doom.c:216047:27: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+   mobj->player = &players[(int)mobj->player-1];
+                           ^
+p-doom.c: In function ‘P_ArchiveSpecials’:
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216099:3: note: in expansion of macro ‘PADSAVEP’
+   PADSAVEP();
+   ^~~~~~~~
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216111:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216122:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216133:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216144:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216155:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216166:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216177:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c: In function ‘P_UnArchiveSpecials’:
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216211:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:216215:33: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      ceiling->sector = &sectors[(int)ceiling->sector];
+                                 ^
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216224:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:216228:30: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      door->sector = &sectors[(int)door->sector];
+                              ^
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216235:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:216239:31: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      floor->sector = &sectors[(int)floor->sector];
+                               ^
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216246:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:216250:30: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      plat->sector = &sectors[(int)plat->sector];
+                              ^
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216259:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:216263:31: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      flash->sector = &sectors[(int)flash->sector];
+                               ^
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216269:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:216273:32: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      strobe->sector = &sectors[(int)strobe->sector];
+                                ^
+p-doom.c:215832:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+ #define PADSAVEP() save_p += (4 - ((int) save_p & 3)) & 3
+                                    ^
+p-doom.c:216279:6: note: in expansion of macro ‘PADSAVEP’
+      PADSAVEP();
+      ^~~~~~~~
+p-doom.c:216283:30: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+      glow->sector = &sectors[(int)glow->sector];
+                              ^
+p-doom.c: In function ‘R_InitColormaps’:
+p-doom.c:220441:28: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     colormaps = (byte *)( ((int)colormaps + 255)&~0xff);
+                            ^
+p-doom.c:220441:17: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+     colormaps = (byte *)( ((int)colormaps + 255)&~0xff);
+                 ^
+p-doom.c: In function ‘R_InitTranslationTables’:
+p-doom.c:221160:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     translationtables = (byte *)(( (int)translationtables + 255 )& ~255);
+                                    ^
+p-doom.c:221160:25: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+     translationtables = (byte *)(( (int)translationtables + 255 )& ~255);
+                         ^
+p-doom.c: At top level:
+p-doom.c:224118:19: error: conflicting types for ‘channels’
+ static channel_t* channels;
+                   ^~~~~~~~
+p-doom.c:198828:16: note: previous declaration of ‘channels’ was here
+ unsigned char* channels[NUM_CHANNELS];
+                ^~~~~~~~
+p-doom.c:225176:0: warning: "BG" redefined
+ #define BG 4
+ 
+p-doom.c:197455:0: note: this is the location of the previous definition
+ #define BG   1
+ 
+p-doom.c:229680:3: error: conflicting types for ‘anim_t’
+ } anim_t;
+   ^~~~~~
+p-doom.c:217097:3: note: previous declaration of ‘anim_t’ was here
+ } anim_t;
+   ^~~~~~
+p-doom.c:229760:16: error: conflicting types for ‘anims’
+ static anim_t *anims[NUMEPISODES] =
+                ^~~~~
+p-doom.c:217136:9: note: previous declaration of ‘anims’ was here
+ anim_t  anims[MAXANIMS];
+         ^~~~~
+p-doom.c:229806:18: error: ‘time’ redeclared as different kind of symbol
+ static patch_t*  time;
+                  ^~~~
+In file included from p-doom.c:198805:0:
+/usr/include/time.h:75:15: note: previous declaration of ‘time’ was here
+ extern time_t time (time_t *__timer) __THROW;
+               ^~~~
+p-doom.c: In function ‘Z_ChangeTag2’:
+p-doom.c:231295:33: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+     if (tag >= PU_PURGELEVEL && (unsigned)block->user < 0x100)
+                                 ^
