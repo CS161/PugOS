@@ -21,7 +21,7 @@
 a.out
 core*
 debuglog.txt
-doom.wad
+*.wad
 doom_log.txt
 doom/linuxdoom-1.10/linux/*
 log.txt
