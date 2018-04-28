@@ -23,6 +23,7 @@ core*
 debuglog.txt
 doom.wad
 doom_log.txt
+doom/linuxdoom-1.10/linux/*
 log.txt
 obj
 pset.tgz
