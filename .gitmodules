@@ -1,0 +1,3 @@
+[submodule "doom"]
+	path = doom
+	url = git@github.com:lcassels/DOOM.git
