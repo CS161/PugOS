@@ -47,6 +47,72 @@ KERNEL_OBJS = $(OBJDIR)/k-exception.ko \
 	$(OBJDIR)/k-memviewer.ko $(OBJDIR)/lib.ko $(OBJDIR)/k-vfs.ko \
 	$(OBJDIR)/k-initfs.ko
 
+DOOM_SRCS_BASE = doomdef.c       \
+		         doomstat.c      \
+		         dstrings.c      \
+		         i_system.c      \
+		         i_sound.c       \
+		         i_video.c       \
+		         i_net.c         \
+		         tables.c        \
+		         f_finale.c      \
+		         f_wipe.c        \
+		         d_main.c        \
+		         d_net.c         \
+		         d_items.c       \
+		         g_game.c        \
+		         m_menu.c        \
+		         m_misc.c        \
+		         m_argv.c        \
+		         m_bbox.c        \
+		         m_fixed.c       \
+		         m_swap.c        \
+		         m_cheat.c       \
+		         m_random.c      \
+		         am_map.c        \
+		         p_ceilng.c      \
+		         p_doors.c       \
+		         p_enemy.c       \
+		         p_floor.c       \
+		         p_inter.c       \
+		         p_lights.c      \
+		         p_map.c         \
+		         p_maputl.c      \
+		         p_plats.c       \
+		         p_pspr.c        \
+		         p_setup.c       \
+		         p_sight.c       \
+		         p_spec.c        \
+		         p_switch.c      \
+		         p_mobj.c        \
+		         p_telept.c      \
+		         p_tick.c        \
+		         p_saveg.c       \
+		         p_user.c        \
+		         r_bsp.c         \
+		         r_data.c        \
+		         r_draw.c        \
+		         r_main.c        \
+		         r_plane.c       \
+		         r_segs.c        \
+		         r_sky.c         \
+		         r_things.c      \
+		         w_wad.c         \
+		         wi_stuff.c      \
+		         v_video.c       \
+		         st_lib.c        \
+		         st_stuff.c      \
+		         hu_stuff.c      \
+		         hu_lib.c        \
+		         s_sound.c       \
+		         z_zone.c        \
+		         info.c          \
+		         sounds.c 		 \
+		         i_main.c
+DOOM_PATH = doom/linuxdoom-1.10
+DOOM_SRCS = $(DOOM_SRCS_BASE:%=$(DOOM_PATH)/%)
+DOOM_OBJS = $(DOOM_SRCS_BASE:%.c=$(OBJDIR)/%.o)
+
 PROCESS_LIB_OBJS = $(OBJDIR)/lib.o $(OBJDIR)/p-lib.o $(OBJDIR)/crc32c.co
 PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-allocator.o \
@@ -199,6 +265,15 @@ $(OBJDIR)/bootsector: $(BOOT_OBJS) boot.ld
 	$(call run,$(OBJDUMP) -C -S $@.full >$@.asm)
 	$(call run,$(NM) -n $@.full >$@.sym)
 	$(call run,$(OBJCOPY) -S -O binary -j .text $@.full $@)
+
+
+# How to make DOOM
+
+$(DOOM_OBJS): $(OBJDIR)/%.o: $(DOOM_PATH)/%.c
+	$(call cxxcompile,$(CXXFLAGS) -O1 -DCHICKADEE_PROCESS -DNORMALUNIX -DLINUX -c $< -o $@,COMPILE $<)
+
+$(OBJDIR)/p-doom.full: $(DOOM_OBJS) $(OBJDIR)/i_main.o $(PROCESS_LIB_OBJS)
+	$(call link,-T process.ld $(DOOM_OBJS) -o $@ $(PROCESS_LIB_OBJS),LINK)
 
 
 # How to make host program for ensuring a loaded symbol table
