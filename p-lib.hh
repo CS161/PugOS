@@ -368,4 +368,36 @@ int dprintf(int fd, const char* format, ...);
 //    Like `dprintf(1, format, ...)`.
 int printf(const char* format, ...);
 
+
+// Stubs for DOOM so we don't have to change source code if possible.
+void exit(int status) {
+    sys_exit(status);
+}
+
+uintptr_t malloc(int size) {
+    // TODO
+    return 0x0;
+}
+
+int usleep(unsigned usec) {
+    return sys_msleep(usec / 1000);
+}
+
+#define fprintf(fd, fmt, args...) dprintf(fd, fmt, ##args)
+
+int vfprintf(int fd, const char* format, va_list ap) {
+    char buf[1025];
+    size_t n = vsnprintf(buf, sizeof(buf), format, ap);
+    if (n < sizeof(buf)) {
+        return sys_write(fd, buf, n);
+    } else {
+        return E_2BIG;
+    }
+}
+
+int fopen(const char* path, const char* flags) {
+    sys_open(path, flags);
+}
+
+
 #endif
