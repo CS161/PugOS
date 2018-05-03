@@ -438,7 +438,7 @@ static inline long ftell(int fd) {
 
 static inline char* getenv(const char* name) {
     // TODO
-    return ".";
+    return (char*) ".";
 }
 
 static inline int access(const char* path, int mode) {
@@ -450,8 +450,12 @@ static inline void fflush(int fd) {
     // TODO
 }
 
-static inline void sprintf(char* str, const char* format, ...) {
-    // TODO
+static inline int sprintf(char* str, const char* format, ...) {
+    va_list val;
+    va_start(val, format);
+    int n = vsnprintf(str, strlen(str), format, val);
+    va_end(val);
+    return n;
 }
 
 static inline int toupper(int c) {
