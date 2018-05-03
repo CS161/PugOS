@@ -1418,10 +1418,22 @@ uintptr_t proc::syscall(regstate* regs) {
             break;
         }
 
-        if (vmiter(this, this->malloc_top_).map(ka2pa(kaddr)) < 0) {
-            r = reinterpret_cast<uintptr_t>(nullptr);
-            break;
+
+
+        // int vm_r;
+
+        // if (vmiter(this, this->malloc_top_).map(ka2pa(kaddr)) < 0) {
+        //     r = reinterpret_cast<uintptr_t>(nullptr);
+        //     break;
+        // }
+
+        int vm_r;
+        for (auto off = 0; off < size; off += PAGESIZE) {
+            vm_r = vmiter(this, this->malloc_top_ + off).map(
+                            this->malloc_top_ + off, PTE_P|PTE_W|PTE_U);
+            assert(vm_r >= 0);
         }
+
 
         r = this->malloc_top_;
         this->malloc_top_ = ROUNDUP(this->malloc_top_ + size + 64, PAGESIZE);

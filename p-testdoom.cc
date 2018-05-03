@@ -4,8 +4,8 @@ void process_main() {
     sys_kdisplay(KDISPLAY_NONE);
 
     // test malloc
-    size_t sz = 1024;
-    int nb = 50;
+    size_t sz = PAGESIZE * 10;
+    int nb = 10;
     char* blocks[nb];
     console_printf("testing malloc...\n");
 
