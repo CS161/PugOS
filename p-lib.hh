@@ -358,6 +358,12 @@ static inline int sys_commit_seppuku() {
     return syscall0(SYSCALL_COMMIT_SEPPUKU);
 }
 
+// sys_malloc()
+//    Allocate memory for process
+static inline void* sys_malloc(size_t size) {
+    return reinterpret_cast<void*>(syscall0(SYSCALL_MALLOC, size));
+}
+
 // dprintf(fd, format, ...)
 //    Construct a string from `format` and pass it to `sys_write(fd)`.
 //    Returns the number of characters printed, or E_2BIG if the string
@@ -376,7 +382,7 @@ static inline void exit(int status) {
 
 static inline char* malloc(int size) {
     // TODO
-    return 0x0;
+    return (char*) sys_malloc(size);
 }
 
 static inline char* realloc(char* ptr, size_t size) {
@@ -449,14 +455,10 @@ static inline void sprintf(char* str, const char* format, ...) {
 }
 
 static inline int toupper(int c) {
-    // TODO
-    return 0;
+    return (c < 'a' || c > 'z') ? c : (c + 'A' - 'a');
 }
 
-static inline int atoi(const char* str) {
-    // TODO
-    return 0;
-}
+int atoi(const char* str);
 
 static inline int getchar() {
     // TODO

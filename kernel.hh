@@ -53,6 +53,8 @@ struct __attribute__((aligned(4096))) proc {
 
     fdtable* fdtable_;
 
+    size_t malloc_top_;                 // dirty hack for malloc
+
     int canary_;
 
     proc();
@@ -425,7 +427,7 @@ void log_vprintf(const char* format, va_list val) __attribute__((noinline));
 void debug_printf_(const char* file, const char* func, int line,
                           const char* format, ...);
 
-#define DEBUG false
+#define DEBUG true
 #include "k-debug.hh"
 
 // log_backtrace

@@ -113,6 +113,7 @@ PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-allocator.o \
 	$(OBJDIR)/p-allocexit.o \
 	$(OBJDIR)/p-cat.o \
+	$(OBJDIR)/p-testdoom.o \
 	$(OBJDIR)/p-echo.o \
 	$(OBJDIR)/p-execallocexit.o \
 	$(OBJDIR)/p-exececho.o \
@@ -146,6 +147,7 @@ INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~'
 	obj/p-allocator \
 	obj/p-allocexit \
 	obj/p-cat \
+	obj/p-testdoom \
 	obj/p-echo \
 	obj/p-execallocexit \
 	obj/p-exececho \

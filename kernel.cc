@@ -1381,6 +1381,30 @@ uintptr_t proc::syscall(regstate* regs) {
         this->yield_noreturn();
     }
 
+    case SYSCALL_MALLOC: {
+        size_t size = regs->reg_rdi;
+        if (size > (1U << 21)) { // 21 = MAX_ORDER from k-alloc.cc
+            log_printf("WARNING: sys_malloc call exceeds maximum size\n");
+        }
+        debug_printf("[%d] sys_malloc %zu -> proc mem @ 0x%x\n",
+            pid_, size, this->malloc_top_);
+
+        auto kaddr = kalloc(size);
+        if (!kaddr) {
+            r = reinterpret_cast<uintptr_t>(nullptr);
+            break;
+        }
+
+        if (vmiter(this, this->malloc_top_).map(ka2pa(kaddr)) < 0) {
+            r = reinterpret_cast<uintptr_t>(nullptr);
+            break;
+        }
+
+        r = this->malloc_top_;
+        this->malloc_top_ = ROUNDUP(this->malloc_top_ + size + 64, PAGESIZE);
+        break;
+    }
+
     default:
         // no such system call
         log_printf("[%d] no such system call %u\n", pid_, regs->reg_rax);

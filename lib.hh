@@ -204,6 +204,8 @@ inline uint32_t crc32c(const void* buf, size_t sz) {
 #define SYSCALL_GETTID          114
 #define SYSCALL_CLONE           115
 #define SYSCALL_TEXIT           116
+// DOOM specific calls
+#define SYSCALL_MALLOC          90
 
 
 // System call error return values

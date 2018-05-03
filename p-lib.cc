@@ -82,3 +82,44 @@ pid_t sys_clone(int (*function)(void*), void* arg, char* stack_top) {
     }
     return r;
 }
+
+
+// atoi
+//    Return integer from string
+//    (Implementation from https://www.geeksforgeeks.org/write-your-own-atoi/)
+
+bool isNumericChar(char x)
+{
+    return x >= '0' && x <= '9';
+}
+  
+// A simple atoi() function. If the given string contains
+// any invalid character, then this function returns 0
+int atoi(const char *str)
+{
+    if (!str)
+       return 0;
+  
+    int res = 0;
+    int sign = 1;
+    int i = 0;
+
+    if (str[0] == '-')
+    {
+        sign = -1;
+        i++;
+    }
+  
+    for (; str[i] != '\0'; ++i)
+    {
+        if (!isNumericChar(str[i])) {
+            sys_log_printf("WARNING: atoi(%s) errored due to invalid char %c\n",
+                str, str[i]);
+            return 0;
+        }
+        res = res*10 + str[i] - '0';
+    }
+  
+    // Return result with sign
+    return sign*res;
+}
