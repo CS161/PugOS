@@ -374,7 +374,12 @@ static inline void exit(int status) {
     sys_exit(status);
 }
 
-static inline uintptr_t malloc(int size) {
+static inline char* malloc(int size) {
+    // TODO
+    return 0x0;
+}
+
+static inline char* realloc(char* ptr, size_t size) {
     // TODO
     return 0x0;
 }
@@ -411,6 +416,11 @@ static inline int fread(void* buf, size_t size, size_t n_items, int fd) {
 }
 
 static inline int fseek(int fd, long offset, int whence) {
+    // TODO
+    return 0;
+}
+
+static inline off_t lseek(int fd, off_t off, int whence) {
     // TODO
     return 0;
 }
@@ -457,6 +467,70 @@ static inline int getchar() {
 static inline void setbuf(int stream, char* buf) {
     // TODO
 }
+
+static inline char* strcat(char* s1, const char* s2) {
+    // TODO
+    return 0x0;
+}
+
+static inline char* strncpy(char* dst, const char* src, size_t len) {
+    // TODO
+    return 0x0;
+}
+
+
+template <typename T>
+static inline int read(int fd, T* buf, size_t size) {
+    // TODO
+    return 0;
+}
+
+static inline int close(int fd) {
+    // TODO
+    return 0;
+}
+
+static inline int feof(int fd) {
+    // TODO
+    return 0;
+}
+
+static inline int sscanf(const char* s, const char* format, ...) {
+    // TODO
+    return 0;
+}
+
+static inline int fscanf(int fd, const char* format, ...) {
+    // TODO
+    return 0;
+}
+
+static inline int write(int fd, void* buf, size_t size) {
+    // TODO
+    return 0;
+}
+
+static inline int abs(int i) {
+    // TODO
+    return 0;
+}
+
+static inline char* alloca(size_t size) {
+    // TODO
+    return 0x0;
+}
+
+static inline int strcasecmp(const char* s1, const char* s2) {
+    // TODO
+    return 0;
+}
+
+static inline int strncasecmp(const char* s1, const char* s2, size_t n) {
+    // TODO
+    return 0;
+}
+
+
 
 
 #endif
