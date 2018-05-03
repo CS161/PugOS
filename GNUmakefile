@@ -51,11 +51,14 @@ DOOM_SRCS_BASE = doomdef.c       \
 		         doomstat.c      \
 		         dstrings.c      \
 		         i_system.c      \
+		         i_sound.c       \
 		         i_video.c       \
+		         i_net.c         \
 		         tables.c        \
 		         f_finale.c      \
 		         f_wipe.c        \
 		         d_main.c        \
+		         d_net.c         \
 		         d_items.c       \
 		         g_game.c        \
 		         m_menu.c        \
@@ -101,8 +104,10 @@ DOOM_SRCS_BASE = doomdef.c       \
 		         st_stuff.c      \
 		         hu_stuff.c      \
 		         hu_lib.c        \
+		         s_sound.c       \
 		         z_zone.c        \
 		         info.c          \
+		         sounds.c 		 \
 		         i_main.c
 DOOM_PATH = doom/linuxdoom-1.10
 DOOM_SRCS = $(DOOM_SRCS_BASE:%=$(DOOM_PATH)/%)
