@@ -88,10 +88,9 @@ pid_t sys_clone(int (*function)(void*), void* arg, char* stack_top) {
 //    Return integer from string
 //    (Implementation from https://www.geeksforgeeks.org/write-your-own-atoi/)
 
-// A utility function to check whether x is numeric
 bool isNumericChar(char x)
 {
-    return (x >= '0' && x <= '9')? true: false;
+    return x >= '0' && x <= '9';
 }
   
 // A simple atoi() function. If the given string contains
@@ -101,23 +100,23 @@ int atoi(const char *str)
     if (!str)
        return 0;
   
-    int res = 0;  // Initialize result
-    int sign = 1;  // Initialize sign as positive
-    int i = 0;  // Initialize index of first digit
+    int res = 0;
+    int sign = 1;
+    int i = 0;
 
-    // If number is negative, then update sign
     if (str[0] == '-')
     {
         sign = -1;
-        i++;  // Also update index of first digit
+        i++;
     }
   
-    // Iterate through all digits of input string and update result
     for (; str[i] != '\0'; ++i)
     {
-        if (isNumericChar(str[i]) == false)
-            return 0; // You may add some lines to write error message
-                      // to error stream
+        if (!isNumericChar(str[i])) {
+            sys_log_printf("WARNING: atoi(%s) errored due to invalid char %c\n",
+                str, str[i]);
+            return 0;
+        }
         res = res*10 + str[i] - '0';
     }
   
