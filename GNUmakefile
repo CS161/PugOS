@@ -11,9 +11,11 @@ all: $(QEMUIMAGEFILES)
 # For verbose commands, run `make V=1 all`.
 V = 0
 ifeq ($(V),1)
+cccompile = $(CXX) $(CPPFLAGS) $(DEPCFLAGS) $(1)
 cxxcompile = $(CXX) $(CPPFLAGS) $(DEPCFLAGS) $(1)
 assemble = $(CC) $(CPPFLAGS) $(DEPCFLAGS) $(ASFLAGS) $(1)
 link = $(LD) $(LDFLAGS) $(1)
+link2 = $(LD) $(LDFLAGS) $(1)
 run = $(1) $(3)
 else
 cxxcompile = @/bin/echo " " $(2) && $(CXX) $(CPPFLAGS) $(DEPCFLAGS) $(1)
@@ -145,7 +147,8 @@ PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-testzombie.o \
 	$(OBJDIR)/p-true.o \
 	$(OBJDIR)/p-wc.o \
-	$(OBJDIR)/p-wcdiskfile.o
+	$(OBJDIR)/p-wcdiskfile.o \
+	$(OBJDIR)/p-doom/o
 
 
 INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~' 2>/dev/null) \
@@ -179,7 +182,8 @@ INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~'
 	obj/p-testzombie \
 	obj/p-true \
 	obj/p-wc \
-	obj/p-wcdiskfile
+	obj/p-wcdiskfile \
+	obj/p-doom
 
 DISKFS_CONTENTS = $(shell find diskfs -type f -not -name '\#*\#' -not -name '*~' 2>/dev/null) \
 	$(INITFS_CONTENTS)
@@ -271,8 +275,9 @@ $(OBJDIR)/bootsector: $(BOOT_OBJS) boot.ld
 
 # How to make DOOM
 
+# Allow -fpermissive: implicit C pointer function casts
 $(DOOM_OBJS): $(OBJDIR)/%.o: $(DOOM_PATH)/%.c
-	$(call cxxcompile,$(CXXFLAGS) -O1 -DCHICKADEE_PROCESS -DNORMALUNIX -c -w $< -o $@,COMPILE $<)
+	$(call cxxcompile,$(CXXFLAGS) -fpermissive -O1 -DCHICKADEE_PROCESS -DNORMALUNIX -c -w $< -o $@,COMPILE $<)
 
 $(OBJDIR)/p-doom.full: $(DOOM_OBJS) $(OBJDIR)/i_main.o $(PROCESS_LIB_OBJS)
 	$(call link,-T process.ld $(DOOM_OBJS) -o $@ $(PROCESS_LIB_OBJS),LINK)

@@ -262,6 +262,13 @@ inline bool is_error(uintptr_t r) {
 #define LSEEK_END               2    // Seek from end of file
 #define LSEEK_SIZE              3    // Do not seek; return file size
 
+#define SEEK_SET                LSEEK_SET     // ¯\_(ツ)_/¯
+#define O_RDONLY                OF_READ     // ¯\_(ツ)_/¯
+#define O_WRONLY               OF_WRITE     // ¯\_(ツ)_/¯
+#define O_CREAT               OF_CREAT
+#define O_TRUNC               OF_TRUNC
+#define SEEK_END LSEEK_END
+#define R_OK 1 // TODO
 
 // Console printing
 

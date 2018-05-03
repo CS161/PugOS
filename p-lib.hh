@@ -487,6 +487,11 @@ static inline int read(int fd, T* buf, size_t size) {
     return 0;
 }
 
+static inline int open(int fd, int flags, int perms=0) {
+    // TODO
+    return 0;
+}
+
 static inline int close(int fd) {
     // TODO
     return 0;
@@ -532,6 +537,13 @@ static inline int strncasecmp(const char* s1, const char* s2, size_t n) {
     return 0;
 }
 
+struct stat {
+    size_t st_size;
+};
+static inline int fstat(int fd, struct stat* buf) {
+    // TODO
+    return 0;
+}
 
 
 
