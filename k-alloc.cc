@@ -7,7 +7,7 @@ static spinlock page_lock;
 // allocator constants
 #define NPAGES (MEMSIZE_PHYSICAL / PAGESIZE)
 #define MIN_ORDER 12
-#define MAX_ORDER 21
+#define MAX_ORDER 24
 #define NORDERS (MAX_ORDER - MIN_ORDER + 1)
 
 // physical page array
@@ -238,7 +238,14 @@ void kfree(void* ptr) {
     if (!pages[pindex].allocated) {
         debug_printf("bad free: %p\n", ptr);
     }
-    assert(pages[pindex].allocated);
+
+    // hack for DOOM's huge memory usage
+    if (!pages[pindex].allocated) {
+        page_lock.unlock(irqs);
+        log_printf("WARNING: free of %p failed\n", ptr);
+        return;
+    }
+    // assert(pages[pindex].allocated);
 
     // free the memory
     pages[pindex].allocated = false;
