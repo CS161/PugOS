@@ -438,12 +438,12 @@ static inline long ftell(int fd) {
 
 static inline char* getenv(const char* name) {
     // TODO
-    return 0x0;
+    return ".";
 }
 
 static inline int access(const char* path, int mode) {
     // TODO
-    return 0;
+    return 1;
 }
 
 static inline void fflush(int fd) {

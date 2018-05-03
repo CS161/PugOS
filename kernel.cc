@@ -171,7 +171,7 @@ void process_exit(proc* p, int status = 0) {
                 display_proc(ptable[i]);
             }
         }
-    
+
         // block until all threads exit
         waiter(current()).block_until(waitpid_wq, [&] () {
                 for (auto i = 0; i < NPROC; ++i) {
@@ -775,7 +775,7 @@ uintptr_t proc::syscall(regstate* regs) {
                 ptable_lock.unlock(irqs);
                 if ((to_reap && no_threads_left) || options == W_NOHANG)
                     break;
-                
+
                 debug_printf("[%d] sys_waitpid blocking\n", pid_);
                 w.block();
             }
@@ -1318,7 +1318,7 @@ uintptr_t proc::syscall(regstate* regs) {
         f->lock_.unlock(irqs);
         break;
     }
- 
+
     case SYSCALL_CLONE: {
         proc* new_p = kalloc_proc();
 
@@ -1386,7 +1386,7 @@ uintptr_t proc::syscall(regstate* regs) {
         if (size > (1U << 21)) { // 21 = MAX_ORDER from k-alloc.cc
             log_printf("WARNING: sys_malloc call exceeds maximum size\n");
         }
-        debug_printf("[%d] sys_malloc %zu -> proc mem @ 0x%x\n",
+        log_printf("[%d] sys_malloc %zu -> proc mem @ 0x%x\n",
             pid_, size, this->malloc_top_);
 
         auto kaddr = kalloc(size);
