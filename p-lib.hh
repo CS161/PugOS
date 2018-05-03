@@ -370,22 +370,22 @@ int printf(const char* format, ...);
 
 
 // Stubs for DOOM so we don't have to change source code if possible.
-static void exit(int status) {
+static inline void exit(int status) {
     sys_exit(status);
 }
 
-static char* malloc(int size) {
+static inline uintptr_t malloc(int size) {
     // TODO
     return 0x0;
 }
 
-static int usleep(unsigned usec) {
+static inline int usleep(unsigned usec) {
     return sys_msleep(usec / 1000);
 }
 
 #define fprintf(fd, fmt, args...) dprintf(fd, fmt, ##args)
 
-static int vfprintf(int fd, const char* format, va_list ap) {
+static inline int vfprintf(int fd, const char* format, va_list ap) {
     char buf[1025];
     size_t n = vsnprintf(buf, sizeof(buf), format, ap);
     if (n < sizeof(buf)) {
@@ -395,66 +395,66 @@ static int vfprintf(int fd, const char* format, va_list ap) {
     }
 }
 
-static int fopen(const char* path, const char* flags) {
-    // TODO fix flags
-    return sys_open(path, 0);
+static inline int fopen(const char* path, const char* flags) {
+    // TODO fix flags to int?
+    return sys_open(path, flags);
 }
 
-static int fclose(int fd) {
+static inline int fclose(int fd) {
     // TODO idk if this is done
     return sys_close(fd);
 }
 
-static int fread(void* buf, size_t size, size_t n_items, int fd) {
+static inline int fread(void* buf, size_t size, size_t n_items, int fd) {
     // TODO
     return 0;
 }
 
-static int fseek(int fd, long offset, int whence) {
+static inline int fseek(int fd, long offset, int whence) {
     // TODO
     return 0;
 }
 
-static long ftell(int fd) {
+static inline long ftell(int fd) {
     // TODO
     return 0;
 }
 
-static char* getenv(const char* name) {
+static inline char* getenv(const char* name) {
     // TODO
     return 0x0;
 }
 
-static int access(const char* path, int mode) {
+static inline int access(const char* path, int mode) {
     // TODO
     return 0;
 }
 
-static void fflush(int fd) {
+static inline void fflush(int fd) {
     // TODO
 }
 
-static void sprintf(char* str, const char* format, ...) {
+static inline void sprintf(char* str, const char* format, ...) {
     // TODO
 }
 
-static int toupper(int c) {
-    // TODO
-    return 0;
-}
-
-static int atoi(const char* str) {
+static inline int toupper(int c) {
     // TODO
     return 0;
 }
 
-static int getchar() {
+static inline int atoi(const char* str) {
+    // TODO
+    return 0;
+}
+
+static inline int getchar() {
     // TODO
     return 0;
 }
 
 // FILE* stream, char* buf??
-static void setbuf(int stream, char* buf) {
+static inline void setbuf(int stream, char* buf) {
     // TODO
 }
 
