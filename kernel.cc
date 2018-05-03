@@ -30,7 +30,7 @@ void kernel_start(const char* command) {
 
     init_hardware();
     console_clear();
-    kdisplay = KDISPLAY_NONE;
+    kdisplay = KDISPLAY_MEMVIEWER;
 
     // Set up process descriptors
     for (pid_t i = 0; i < NPROC; i++) {
