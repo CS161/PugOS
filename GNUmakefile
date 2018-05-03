@@ -183,8 +183,7 @@ INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~'
 	obj/p-testzombie \
 	obj/p-true \
 	obj/p-wc \
-	obj/p-wcdiskfile \
-	obj/p-doom
+	obj/p-wcdiskfile
 
 DISKFS_CONTENTS = $(shell find diskfs -type f -not -name '\#*\#' -not -name '*~' 2>/dev/null) \
 	$(INITFS_CONTENTS)
