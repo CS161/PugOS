@@ -194,7 +194,7 @@ extern volatile unsigned long ticks;     // number of ticks since boot
 
 
 // Physical memory size (75 MB - about 2 MB used by kernel)
-#define MEMSIZE_PHYSICAL        (75 * 1024 * 1024)
+#define MEMSIZE_PHYSICAL        (30 * 1024 * 1024)
 // Virtual memory size
 #define MEMSIZE_VIRTUAL         MEMSIZE_PHYSICAL
 
