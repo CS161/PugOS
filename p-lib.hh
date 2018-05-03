@@ -397,7 +397,7 @@ static inline int vfprintf(int fd, const char* format, va_list ap) {
 
 static inline int fopen(const char* path, const char* flags) {
     // TODO fix flags to int?
-    return sys_open(path, flags);
+    return sys_open(path, 0);
 }
 
 static inline int fclose(int fd) {
