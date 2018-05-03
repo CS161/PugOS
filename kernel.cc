@@ -701,8 +701,10 @@ uintptr_t proc::syscall(regstate* regs) {
         int options = regs->reg_rsi;
 
         auto irqs = ptable_lock.lock();
-        debug_printf("[%d] sys_waitpid on child pid %d; options %s W_NOHANG"
-                     "\n", pid_, child_pid, options == W_NOHANG ? "=" : "!=");
+        if (true_pid_ > 1) {
+            debug_printf("[%d] sys_waitpid on child pid %d; options %s W_NOHANG"
+                       "\n", pid_, child_pid, options == W_NOHANG ? "=" : "!=");
+        }
 
         pid_t parent_of_child = 0;
         if (ptable[child_pid]) {
@@ -715,14 +717,19 @@ uintptr_t proc::syscall(regstate* regs) {
         if ((child_pid != 0 && pid_ != parent_of_child)
             || (child_pid == 0 && children_.empty())) {
             r = E_CHILD;
-            debug_printf("[%d] sys_waitpid returning E_CHILD r=%d\n", pid_, r);
+            if (true_pid_ > 1) {
+                debug_printf("[%d] sys_waitpid returning E_CHILD r=%d\n",
+                    pid_, r);
+            }
             break;
         }
         else {
             waiter w(this);
             while (true) {
                 irqs = ptable_lock.lock();
-                debug_printf("[%d] sys_waitpid preparing\n", pid_);
+                if (true_pid_ > 1) {
+                    debug_printf("[%d] sys_waitpid preparing\n", pid_);
+                }
                 w.prepare(&waitpid_wq);
 
                 // wait for any child
@@ -736,8 +743,10 @@ uintptr_t proc::syscall(regstate* regs) {
                             if (s != 0) {
                                 exit_status = s;
                             }
-                            debug_printf("[%d] sys_waitpid reaped tid %d, "
-                                "exit_status %d\n", pid_, p->pid_, s);
+                            if (true_pid_ > 1) {
+                                debug_printf("[%d] sys_waitpid reaped tid %d, "
+                                    "exit_status %d\n", pid_, p->pid_, s);
+                            }
                             break;
                         }
                     }
@@ -756,8 +765,10 @@ uintptr_t proc::syscall(regstate* regs) {
                             if (s != 0) {
                                 exit_status = s;
                             }
-                            debug_printf("[%d] sys_waitpid reaped tid %d, "
-                                "exit_status %d\n", pid_, i, s);
+                            if (true_pid_ > 1) {
+                                debug_printf("[%d] sys_waitpid reaped tid %d, "
+                                    "exit_status %d\n", pid_, i, s);
+                            }
                         }
                     }
                 }
@@ -769,27 +780,39 @@ uintptr_t proc::syscall(regstate* regs) {
                     }
                 }
 
-                debug_printf("[%d] sys_waitpid to_reap=%d, %sthreads left\n",
-                    pid_, to_reap, no_threads_left ? "no " : "");
+                if (true_pid_ > 1) {
+                    debug_printf("[%d] sys_waitpid to_reap=%d, %sthreads left"
+                        "\n", pid_, to_reap, no_threads_left ? "no " : "");
+                }
 
                 ptable_lock.unlock(irqs);
                 if ((to_reap && no_threads_left) || options == W_NOHANG)
                     break;
                 
-                debug_printf("[%d] sys_waitpid blocking\n", pid_);
+                if (true_pid_ > 1) {
+                    debug_printf("[%d] sys_waitpid blocking\n", pid_);
+                }
                 w.block();
             }
             w.clear();
         }
-        debug_printf("[%d] sys_waitpid pid to_reap=%d\n", pid_, to_reap);
+
+        if (true_pid_ > 1) {
+            debug_printf("[%d] sys_waitpid pid to_reap=%d\n", pid_, to_reap);
+        }
 
         if (!to_reap && options == W_NOHANG && r != (uintptr_t) E_CHILD) {
             r = E_AGAIN;
-            debug_printf("[%d] sys_waitpid returning E_AGAIN r=%d\n", pid_, r);
+            if (true_pid_ > 1) {
+                debug_printf("[%d] sys_waitpid returning E_AGAIN r=%d\n", pid_,
+                    r);
+            }
         }
         else {
-            debug_printf("[%d] sys_waitpid exit_status=%d\n",
-                pid_, exit_status);
+            if (true_pid_ > 1) {
+                debug_printf("[%d] sys_waitpid exit_status=%d\n",
+                    pid_, exit_status);
+            }
             asm("movl %0, %%ecx;": : "r" (exit_status) : "ecx");
             r = to_reap;
         }
