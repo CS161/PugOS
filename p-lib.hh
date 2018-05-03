@@ -444,14 +444,10 @@ static inline void sprintf(char* str, const char* format, ...) {
 }
 
 static inline int toupper(int c) {
-    // TODO
-    return 0;
+    return (c < 'a' || c > 'z') ? c : (c + 'A' - 'a');
 }
 
-static inline int atoi(const char* str) {
-    // TODO
-    return 0;
-}
+int atoi(const char* str);
 
 static inline int getchar() {
     // TODO
@@ -462,13 +458,6 @@ static inline int getchar() {
 static inline void setbuf(int stream, char* buf) {
     // TODO
 }
-
-// static inline void* memset(void* v, int c, size_t n) {
-//     for (char* p = (char*) v; n > 0; ++p, --n) {
-//         *p = c;
-//     }
-//     return v;
-// }
 
 
 #endif
