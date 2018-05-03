@@ -120,7 +120,7 @@ PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-allocator.o \
 	$(OBJDIR)/p-allocexit.o \
 	$(OBJDIR)/p-cat.o \
-	$(OBJDIR)/p-testdoom.o \
+	$(OBJDIR)/p-doom.o \
 	$(OBJDIR)/p-echo.o \
 	$(OBJDIR)/p-execallocexit.o \
 	$(OBJDIR)/p-exececho.o \
@@ -128,6 +128,7 @@ PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-init.o \
 	$(OBJDIR)/p-readdiskfile.o \
 	$(OBJDIR)/p-sh.o \
+	$(OBJDIR)/p-testdoom.o \
 	$(OBJDIR)/p-testeintr.o \
 	$(OBJDIR)/p-testscript.o \
 	$(OBJDIR)/p-testgfx.o \
@@ -147,15 +148,14 @@ PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-testzombie.o \
 	$(OBJDIR)/p-true.o \
 	$(OBJDIR)/p-wc.o \
-	$(OBJDIR)/p-wcdiskfile.o \
-	$(OBJDIR)/p-doom/o
+	$(OBJDIR)/p-wcdiskfile.o
 
 
 INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~' 2>/dev/null) \
 	obj/p-allocator \
 	obj/p-allocexit \
 	obj/p-cat \
-	obj/p-testdoom \
+	obj/p-doom \
 	obj/p-echo \
 	obj/p-execallocexit \
 	obj/p-exececho \
@@ -163,6 +163,7 @@ INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~'
 	obj/p-init \
 	obj/p-readdiskfile \
 	obj/p-sh \
+	obj/p-testdoom \
 	obj/p-testeintr \
 	obj/p-testscript \
 	obj/p-testgfx \
