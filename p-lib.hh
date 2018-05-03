@@ -370,22 +370,22 @@ int printf(const char* format, ...);
 
 
 // Stubs for DOOM so we don't have to change source code if possible.
-void exit(int status) {
+static void exit(int status) {
     sys_exit(status);
 }
 
-uintptr_t malloc(int size) {
+static uintptr_t malloc(int size) {
     // TODO
     return 0x0;
 }
 
-int usleep(unsigned usec) {
+static int usleep(unsigned usec) {
     return sys_msleep(usec / 1000);
 }
 
 #define fprintf(fd, fmt, args...) dprintf(fd, fmt, ##args)
 
-int vfprintf(int fd, const char* format, va_list ap) {
+static int vfprintf(int fd, const char* format, va_list ap) {
     char buf[1025];
     size_t n = vsnprintf(buf, sizeof(buf), format, ap);
     if (n < sizeof(buf)) {
@@ -395,8 +395,9 @@ int vfprintf(int fd, const char* format, va_list ap) {
     }
 }
 
-int fopen(const char* path, const char* flags) {
-    sys_open(path, flags);
+// TODO flags
+static int fopen(const char* path, int flags) {
+    return sys_open(path, flags);
 }
 
 
