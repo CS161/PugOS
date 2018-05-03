@@ -438,7 +438,7 @@ static inline long ftell(int fd) {
 
 static inline char* getenv(const char* name) {
     // TODO
-    return ".";
+    return (char*) ".";
 }
 
 static inline int access(const char* path, int mode) {

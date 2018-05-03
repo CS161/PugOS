@@ -3,8 +3,6 @@
 void process_main() {
     sys_kdisplay(KDISPLAY_NONE);
 
-    console_printf("\n\n\n\n\n\n");
-
     // test malloc
     size_t sz = PAGESIZE * 10;
     int nb = 10;
