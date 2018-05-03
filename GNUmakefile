@@ -282,6 +282,9 @@ $(DOOM_OBJS): $(OBJDIR)/%.o: $(DOOM_PATH)/%.c
 $(OBJDIR)/p-doom.full: $(DOOM_OBJS) $(OBJDIR)/i_main.o $(PROCESS_LIB_OBJS)
 	$(call link,-T process.ld $(DOOM_OBJS) -o $@ $(PROCESS_LIB_OBJS),LINK)
 
+clean-doom:
+	$(call run,rm -rf $(DOOM_OBJS:%.c=%*) $(OBJDIR)/p-doom*,CLEAN)
+
 
 # How to make host program for ensuring a loaded symbol table
 
