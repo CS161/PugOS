@@ -374,7 +374,7 @@ static void exit(int status) {
     sys_exit(status);
 }
 
-static uintptr_t malloc(int size) {
+static char* malloc(int size) {
     // TODO
     return 0x0;
 }
@@ -395,9 +395,67 @@ static int vfprintf(int fd, const char* format, va_list ap) {
     }
 }
 
-// TODO flags
-static int fopen(const char* path, int flags) {
-    return sys_open(path, flags);
+static int fopen(const char* path, const char* flags) {
+    // TODO fix flags
+    return sys_open(path, 0);
+}
+
+static int fclose(int fd) {
+    // TODO idk if this is done
+    return sys_close(fd);
+}
+
+static int fread(void* buf, size_t size, size_t n_items, int fd) {
+    // TODO
+    return 0;
+}
+
+static int fseek(int fd, long offset, int whence) {
+    // TODO
+    return 0;
+}
+
+static long ftell(int fd) {
+    // TODO
+    return 0;
+}
+
+static char* getenv(const char* name) {
+    // TODO
+    return 0x0;
+}
+
+static int access(const char* path, int mode) {
+    // TODO
+    return 0;
+}
+
+static void fflush(int fd) {
+    // TODO
+}
+
+static void sprintf(char* str, const char* format, ...) {
+    // TODO
+}
+
+static int toupper(int c) {
+    // TODO
+    return 0;
+}
+
+static int atoi(const char* str) {
+    // TODO
+    return 0;
+}
+
+static int getchar() {
+    // TODO
+    return 0;
+}
+
+// FILE* stream, char* buf??
+static void setbuf(int stream, char* buf) {
+    // TODO
 }
 
 

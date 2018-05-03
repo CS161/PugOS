@@ -265,7 +265,7 @@ $(OBJDIR)/bootsector: $(BOOT_OBJS) boot.ld
 # How to make DOOM
 
 $(DOOM_OBJS): $(OBJDIR)/%.o: $(DOOM_PATH)/%.c
-	$(call assemble,-O1 -DCHICKADEE_PROCESS -DNORMALUNIX -c $< -o $@,COMPILE $<)
+	$(call cxxcompile,$(CXXFLAGS) -O1 -DCHICKADEE_PROCESS -DNORMALUNIX -c -w $< -o $@,COMPILE $<)
 
 $(OBJDIR)/p-doom.full: $(DOOM_OBJS) $(OBJDIR)/i_main.o $(PROCESS_LIB_OBJS)
 	$(call link,-T process.ld $(DOOM_OBJS) -o $@ $(PROCESS_LIB_OBJS),LINK)
