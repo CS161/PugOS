@@ -239,10 +239,10 @@ void kfree(void* ptr) {
         debug_printf("bad free: %p\n", ptr);
     }
 
-    // hack for DOOM's huge memory usage
+    // hack for DOOM's huge memory usage breaking the allocator
     if (!pages[pindex].allocated) {
         page_lock.unlock(irqs);
-        log_printf("WARNING: free of %p failed\n", ptr);
+        // log_printf("WARNING: free of %p failed\n", ptr);
         return;
     }
     // assert(pages[pindex].allocated);

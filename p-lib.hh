@@ -375,18 +375,24 @@ int dprintf(int fd, const char* format, ...);
 int printf(const char* format, ...);
 
 
+
+
 // Stubs for DOOM so we don't have to change source code if possible.
+#define todo()                                          \
+    sys_log_printf("DOOM STUB CALLED: DOOM@ %p: %s\n",  \
+        read_rbp(), __FUNCTION__)
+
 static inline void exit(int status) {
     sys_exit(status);
 }
 
 static inline char* malloc(int size) {
-    // TODO
     return (char*) sys_malloc(size);
 }
 
 static inline char* realloc(char* ptr, size_t size) {
     // TODO
+    todo();
     return 0x0;
 }
 
@@ -408,46 +414,55 @@ static inline int vfprintf(int fd, const char* format, va_list ap) {
 
 static inline int fopen(const char* path, const char* flags) {
     // TODO fix flags to int?
+    todo();
     return sys_open(path, 0);
 }
 
 static inline int fclose(int fd) {
     // TODO idk if this is done
+    todo();
     return sys_close(fd);
 }
 
 static inline int fread(void* buf, size_t size, size_t n_items, int fd) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline int fseek(int fd, long offset, int whence) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline off_t lseek(int fd, off_t off, int whence) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline long ftell(int fd) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline char* getenv(const char* name) {
     // TODO
+    todo();
     return (char*) ".";
 }
 
 static inline int access(const char* path, int mode) {
     // TODO
+    todo();
     return 1;
 }
 
 static inline void fflush(int fd) {
     // TODO
+    todo();
 }
 
 static inline int sprintf(char* str, const char* format, ...) {
@@ -466,21 +481,25 @@ int atoi(const char* str);
 
 static inline int getchar() {
     // TODO
+    todo();
     return 0;
 }
 
 // FILE* stream, char* buf??
 static inline void setbuf(int stream, char* buf) {
     // TODO
+    todo();
 }
 
 static inline char* strcat(char* s1, const char* s2) {
     // TODO
+    todo();
     return 0x0;
 }
 
 static inline char* strncpy(char* dst, const char* src, size_t len) {
     // TODO
+    todo();
     return 0x0;
 }
 
@@ -488,56 +507,67 @@ static inline char* strncpy(char* dst, const char* src, size_t len) {
 template <typename T>
 static inline int read(int fd, T* buf, size_t size) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline int open(int fd, int flags, int perms=0) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline int close(int fd) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline int feof(int fd) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline int sscanf(const char* s, const char* format, ...) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline int fscanf(int fd, const char* format, ...) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline int write(int fd, void* buf, size_t size) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline int abs(int i) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline char* alloca(size_t size) {
     // TODO
+    todo();
     return 0x0;
 }
 
 static inline int strcasecmp(const char* s1, const char* s2) {
     // TODO
+    todo();
     return 0;
 }
 
 static inline int strncasecmp(const char* s1, const char* s2, size_t n) {
     // TODO
+    todo();
     return 0;
 }
 
@@ -546,6 +576,7 @@ struct stat {
 };
 static inline int fstat(int fd, struct stat* buf) {
     // TODO
+    todo();
     return 0;
 }
 
