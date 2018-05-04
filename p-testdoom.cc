@@ -4,18 +4,12 @@ void process_main() {
     sys_kdisplay(KDISPLAY_NONE);
 
     // test sprintf
+    console_printf("testing sprintf...\n");
     const char* tstr = "test string %d %p";
     char tout[50];
-    console_printf("strlen '%s': %d, should be 17 without \\0\n", tstr, strlen(tstr));
     sprintf(tout, tstr, 12345, nullptr);
-    console_printf("sprintf output: ");
-    for (auto i=0; i < 50 && tout[i]; ++i) {
-        console_printf("%c", tout[i]);
-    }
-    console_printf("\n");
-
-    console_printf("tstr '%s' -> '%s', %%d=%d %%p=%p\n",
-        tstr, tout, 12345, nullptr);
+    assert(strcmp("test string 12345 0x0", tout) == 0);
+    console_printf("sprintf tests finished\n\n");
 
 
     // test atoi
@@ -23,8 +17,7 @@ void process_main() {
     assert_eq(-473, atoi("-473"));
     assert_eq(0, atoi("0"));
     assert_eq(2342827, atoi("2342827"));
-    console_printf("atoi tests finished\n");
-
+    console_printf("atoi tests finished\n\n");
 
 
     // test toupper
@@ -39,8 +32,15 @@ void process_main() {
     assert_eq('a' - 1, toupper('a' - 1));
     assert_eq('z' + 1, toupper('z' + 1));
     assert_eq(' ', toupper(' '));
-    console_printf("toupper tests finished\n");
+    console_printf("toupper tests finished\n\n");
 
+
+    // test abs
+    console_printf("testing abs...\n");
+    assert_eq(0, abs(0));
+    assert_eq(12345, abs(12345));
+    assert_eq(42, abs(-42));
+    console_printf("finished\n\n");
 
 
     // test malloc
@@ -68,7 +68,7 @@ void process_main() {
             }
         }
     }
-    console_printf("malloc tests finished\n");
+    console_printf("malloc tests finished\n\n");
 
     sys_exit(0);
 }
