@@ -35,6 +35,14 @@ void process_main() {
     console_printf("toupper tests finished\n\n");
 
 
+    // test abs
+    console_printf("testing abs...\n");
+    assert_eq(0, abs(0));
+    assert_eq(12345, abs(12345));
+    assert_eq(42, abs(-42));
+    console_printf("finished\n\n");
+
+
     // test malloc
     size_t sz = PAGESIZE * 10;
     int nb = 10;

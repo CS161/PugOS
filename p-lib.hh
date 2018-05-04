@@ -548,9 +548,7 @@ static inline int write(int fd, void* buf, size_t size) {
 }
 
 static inline int abs(int i) {
-    // TODO
-    todo();
-    return 0;
+    return i < 0 ? -i : i;
 }
 
 static inline char* alloca(size_t size) {
