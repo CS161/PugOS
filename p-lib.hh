@@ -390,10 +390,12 @@ static inline char* malloc(int size) {
     return (char*) sys_malloc(size);
 }
 
-static inline char* realloc(char* ptr, size_t size) {
-    // TODO
-    todo();
-    return 0x0;
+static inline char* realloc(char* ptr, size_t size, size_t oldsize) {
+    auto newptr = malloc(size);
+    assert(newptr);
+    memcpy(newptr, ptr, oldsize);
+    // TODO: free ptr
+    return newptr;
 }
 
 static inline int usleep(unsigned usec) {
