@@ -453,7 +453,7 @@ static inline void fflush(int fd) {
 static inline int sprintf(char* str, const char* format, ...) {
     va_list val;
     va_start(val, format);
-    int n = vsnprintf(str, strlen(str), format, val);
+    int n = vsnprintf(str, 0x10000, format, val);
     va_end(val);
     return n;
 }
