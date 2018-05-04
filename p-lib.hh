@@ -393,7 +393,7 @@ static inline char* malloc(int size) {
 static inline char* realloc(char* ptr, size_t size) {
     // TODO
     todo();
-    return 0x0;
+    return malloc(size);
 }
 
 static inline int usleep(unsigned usec) {
@@ -497,10 +497,13 @@ static inline char* strcat(char* s1, const char* s2) {
     return 0x0;
 }
 
+// pulled from https://code.woboq.org/userspace/glibc/string/strncpy.c.html
 static inline char* strncpy(char* dst, const char* src, size_t len) {
-    // TODO
-    todo();
-    return 0x0;
+    size_t size = strnlen(src, len);
+    if (size != len) {
+        memset (dst + size, '\0', len - size);
+    }
+    return reinterpret_cast<char*>(memcpy(dst, src, size));
 }
 
 
