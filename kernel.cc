@@ -28,6 +28,10 @@ static void process_setup(pid_t pid, const char* program_name);
 void kernel_start(const char* command) {
     assert(read_rbp() % 16 == 0);  // check stack alignment
 
+#ifdef GFX
+    log_printf("Graphics enabled! No console output will be visible.\n");
+#endif
+
     init_hardware();
     console_clear();
     kdisplay = KDISPLAY_MEMVIEWER;

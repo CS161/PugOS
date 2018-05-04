@@ -40,6 +40,7 @@ CCOMMONFLAGS := -m64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mno-sse3 \
 # Include -fno-stack-protector if the option exists.
 CCOMMONFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 
+BOOTENTRYFLAGS = 
 ASFLAGS := $(CCOMMONFLAGS)
 CFLAGS := $(CFLAGS) $(CCOMMONFLAGS) -std=gnu11 -gdwarf
 CXXFLAGS := $(CXXFLAGS) $(CCOMMONFLAGS) -std=gnu++1z \
@@ -58,6 +59,7 @@ endif
 # GFX toggle
 ifeq ($(filter 1,$(GFX)),1)
 KERNELCXXFLAGS += -DGFX
+BOOTENTRYFLAGS += -DGFX
 endif
 
 # Linker flags

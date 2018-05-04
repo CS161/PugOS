@@ -229,7 +229,7 @@ $(OBJDIR)/boot.o: $(OBJDIR)/%.o: boot.cc $(KERNELBUILDSTAMPS)
 
 $(OBJDIR)/bootentry.o: $(OBJDIR)/%.o: \
 	bootentry.S $(OBJDIR)/k-asm.h $(KERNELBUILDSTAMPS)
-	$(call assemble,-Os -fomit-frame-pointer -c $< -o $@,ASSEMBLE $<)
+	$(call assemble,$(BOOTENTRYFLAGS) -Os -fomit-frame-pointer -c $< -o $@,ASSEMBLE $<)
 
 
 # How to make supporting source files
