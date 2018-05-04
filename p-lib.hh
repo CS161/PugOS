@@ -508,13 +508,13 @@ template <typename T>
 static inline int read(int fd, T* buf, size_t size) {
     // TODO
     todo();
-    return 0;
+    return sys_read(fd, reinterpret_cast<char*>(buf), size);
 }
 
-static inline int open(int fd, int flags, int perms=0) {
-    // TODO
+static inline int open(const char* path, int flags, int perms=0) {
+    // TODO flags more
     todo();
-    return 0;
+    return sys_open(path, O_RDONLY);
 }
 
 static inline int close(int fd) {
