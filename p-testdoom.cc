@@ -11,7 +11,7 @@ void process_main() {
     char tout[50];
     sprintf(tout, tstr, 12345, nullptr);
     assert(strcmp("test string 12345 0x0", tout) == 0);
-    console_printf("sprintf tests finished\n\n");
+    console_printf("finished\n\n");
 
 
     // test atoi
@@ -19,7 +19,7 @@ void process_main() {
     assert_eq(-473, atoi("-473"));
     assert_eq(0, atoi("0"));
     assert_eq(2342827, atoi("2342827"));
-    console_printf("atoi tests finished\n\n");
+    console_printf("finished\n\n");
 
 
     // test toupper
@@ -28,13 +28,39 @@ void process_main() {
     assert_eq('Z', toupper('Z'));
     assert_eq('A', toupper('a'));
     assert_eq('F', toupper('f'));
-    assert_eq('Z', toupper('Z'));
+    assert_eq('Z', toupper('z'));
     assert_eq(',', toupper(','));
     assert_eq('7', toupper('7'));
     assert_eq('a' - 1, toupper('a' - 1));
     assert_eq('z' + 1, toupper('z' + 1));
     assert_eq(' ', toupper(' '));
-    console_printf("toupper tests finished\n\n");
+    console_printf("finished\n\n");
+
+
+    // test tolower
+    console_printf("testing tolower...\n");
+    assert_eq('a', tolower('a'));
+    assert_eq('z', tolower('z'));
+    assert_eq('a', tolower('A'));
+    assert_eq('f', tolower('F'));
+    assert_eq('z', tolower('Z'));
+    assert_eq(',', tolower(','));
+    assert_eq('7', tolower('7'));
+    assert_eq('A' - 1, tolower('A' - 1));
+    assert_eq('Z' + 1, tolower('Z' + 1));
+    assert_eq(' ', tolower(' '));
+    console_printf("finished\n\n");
+
+
+    // test strncpy
+    console_printf("testing strncpy...\n");
+    auto str = (char*) "this is a string";
+    char buf[10];
+    strncpy(buf, str, 7);
+    for (unsigned i = 0; i < 7; ++i) {
+        assert_eq(str[i], buf[i]);
+    }
+    console_printf("finished\n");
 
 
     // test abs

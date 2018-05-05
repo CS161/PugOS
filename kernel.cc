@@ -548,6 +548,7 @@ void proc::exception(regstate* regs) {
             panic("Kernel page fault for %p (%s %s, rip=%p)!\n",
                   addr, operation, problem, regs->reg_rip);
         }
+        console_printf("\n");
         error_printf(CPOS(24, 0), 0x0C00,
                      "Process %d page fault for %p (%s %s, rip=%p)!\n",
                      pid_, addr, operation, problem, regs->reg_rip);
