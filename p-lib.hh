@@ -580,15 +580,13 @@ static inline int strcasecmp(const char* s1, const char* s2) {
 }
 
 static inline int strncasecmp(const char* s1, const char* s2, size_t n) {
-    // char buf1[n+1];
-    // char buf2[n+1];
-    // memcpy(buf1, s1, n);
-    // memcpy(buf2, s2, n);
-    // buf1[n] = '\0';
-    // buf2[n] = '\0';
-    // return strcasecmp(buf1, buf2);
-    todo();
-    return 0;
+    char buf1[n+1];
+    char buf2[n+1];
+    memcpy(buf1, s1, n);
+    memcpy(buf2, s2, n);
+    buf1[n] = '\0';
+    buf2[n] = '\0';
+    return strcasecmp(buf1, buf2);
 }
 
 struct stat {

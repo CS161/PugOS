@@ -60,7 +60,15 @@ void process_main() {
     for (unsigned i = 0; i < 7; ++i) {
         assert_eq(str[i], buf[i]);
     }
-    console_printf("finished\n");
+    console_printf("finished\n\n");
+
+    // test strncasecmp
+    console_printf("testing strncasecmp...\n");
+    str = (char*) "testing string";
+    auto str2 = (char*) "test kind of";
+    assert_eq(strncasecmp(str, str2, 4), 0);
+    assert_ne(strncasecmp(str, str2, 6), 0);
+    console_printf("finished\n\n");
 
 
     // test abs
