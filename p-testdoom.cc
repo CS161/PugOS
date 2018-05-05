@@ -52,6 +52,17 @@ void process_main() {
     console_printf("finished\n\n");
 
 
+    // test strncpy
+    console_printf("testing strncpy...\n");
+    auto str = (char*) "this is a string";
+    char buf[10];
+    strncpy(buf, str, 7);
+    for (unsigned i = 0; i < 7; ++i) {
+        assert_eq(str[i], buf[i]);
+    }
+    console_printf("finished\n");
+
+
     // test abs
     console_printf("testing abs...\n");
     assert_eq(0, abs(0));

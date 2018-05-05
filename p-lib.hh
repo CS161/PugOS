@@ -509,9 +509,10 @@ static inline char* strcat(char* s1, const char* s2) {
 }
 
 static inline char* strncpy(char* dst, const char* src, size_t len) {
-    // TODO
-    todo();
-    return 0x0;
+    for (size_t i = 0; i < len; i++) {
+        dst[i] = src[i];
+    }
+    return dst;
 }
 
 
