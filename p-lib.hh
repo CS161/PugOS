@@ -378,9 +378,14 @@ int printf(const char* format, ...);
 
 
 // Stubs for DOOM so we don't have to change source code if possible.
-#define todo()                                          \
-    sys_log_printf("DOOM STUB CALLED: DOOM@ %p: %s\n",  \
-        read_rbp(), __FUNCTION__)
+#define todo()                                              \
+    uintptr_t rsp = read_rsp(), rbp = read_rbp();           \
+    uintptr_t stack_top = ROUNDUP(rsp, PAGESIZE);           \
+    uintptr_t* rbpx = reinterpret_cast<uintptr_t*>(rbp);    \
+    uintptr_t ret_rip = rbpx[1];                            \
+    sys_log_printf("[DOOM] stub func '%s' called by func @ %p\n",      \
+        __FUNCTION__, ret_rip)
+
 
 static inline void exit(int status) {
     sys_exit(status);
@@ -390,10 +395,12 @@ static inline char* malloc(int size) {
     return (char*) sys_malloc(size);
 }
 
-static inline char* realloc(char* ptr, size_t size) {
-    // TODO
-    todo();
-    return malloc(size);
+static inline char* realloc(char* ptr, size_t size, size_t oldsize) {
+    auto newptr = malloc(size);
+    assert(newptr);
+    memcpy(newptr, ptr, oldsize);
+    // TODO: free ptr
+    return newptr;
 }
 
 static inline int usleep(unsigned usec) {
@@ -415,12 +422,12 @@ static inline int vfprintf(int fd, const char* format, va_list ap) {
 static inline int fopen(const char* path, const char* flags) {
     // TODO fix flags to int?
     todo();
-    return sys_open(path, 0);
+    return sys_open(path, O_RDONLY);
 }
 
 static inline int fclose(int fd) {
     // TODO idk if this is done
-    todo();
+    // todo();
     return sys_close(fd);
 }
 
@@ -437,9 +444,7 @@ static inline int fseek(int fd, long offset, int whence) {
 }
 
 static inline off_t lseek(int fd, off_t off, int whence) {
-    // TODO
-    todo();
-    return 0;
+    return sys_lseek(fd, off, whence);
 }
 
 static inline long ftell(int fd) {
@@ -509,8 +514,6 @@ static inline char* strncpy(char* dst, const char* src, size_t len) {
 
 template <typename T>
 static inline int read(int fd, T* buf, size_t size) {
-    // TODO
-    todo();
     return sys_read(fd, reinterpret_cast<char*>(buf), size);
 }
 
@@ -555,9 +558,7 @@ static inline int abs(int i) {
 }
 
 static inline char* alloca(size_t size) {
-    // TODO
-    todo();
-    return 0x0;
+    return malloc(size);
 }
 
 static inline int strcasecmp(const char* s1, const char* s2) {

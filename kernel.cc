@@ -28,6 +28,10 @@ static void process_setup(pid_t pid, const char* program_name);
 void kernel_start(const char* command) {
     assert(read_rbp() % 16 == 0);  // check stack alignment
 
+#ifdef GFX
+    log_printf("Graphics enabled! No console output will be visible.\n");
+#endif
+
     init_hardware();
     console_clear();
     kdisplay = KDISPLAY_MEMVIEWER;
@@ -658,11 +662,14 @@ uintptr_t proc::syscall(regstate* regs) {
         uintptr_t addr = regs->reg_rdi;
 
         int vm_r;
-        for (auto off = 0; off < SCREEN_MEMSIZE; off += PAGESIZE) {
+        size_t off;
+        for (off = 0; off < SCREEN_MEMSIZE; off += PAGESIZE) {
             vm_r = vmiter(this, addr + off).map(SCREEN_MEMBASE + off,
                                                 PTE_P|PTE_W|PTE_U);
             assert(vm_r >= 0);
         }
+        debug_printf("[%d] sys_map_screen -> %p to ~%p\n",
+            pid_, addr, addr + off);
         r = 0;
         break;
     }
