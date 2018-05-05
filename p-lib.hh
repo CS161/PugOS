@@ -434,13 +434,13 @@ static inline int fclose(int fd) {
 static inline int fread(void* buf, size_t size, size_t n_items, int fd) {
     // TODO
     todo();
-    return 0;
+    return sys_read(fd, reinterpret_cast<char*>(buf), size * n_items);
 }
 
-static inline int fseek(int fd, long offset, int whence) {
+static inline int fseek(int fd, off_t off, int whence) {
     // TODO
-    todo();
-    return 0;
+    // todo();
+    return sys_lseek(fd, off, whence);
 }
 
 static inline off_t lseek(int fd, off_t off, int whence) {
@@ -530,7 +530,7 @@ static inline int open(const char* path, int flags, int perms=0) {
 static inline int close(int fd) {
     // TODO
     todo();
-    return 0;
+    return sys_close(fd);
 }
 
 static inline int feof(int fd) {
@@ -580,7 +580,13 @@ static inline int strcasecmp(const char* s1, const char* s2) {
 }
 
 static inline int strncasecmp(const char* s1, const char* s2, size_t n) {
-    // TODO
+    // char buf1[n+1];
+    // char buf2[n+1];
+    // memcpy(buf1, s1, n);
+    // memcpy(buf2, s2, n);
+    // buf1[n] = '\0';
+    // buf2[n] = '\0';
+    // return strcasecmp(buf1, buf2);
     todo();
     return 0;
 }
