@@ -484,6 +484,10 @@ static inline int toupper(int c) {
     return (c < 'a' || c > 'z') ? c : (c + 'A' - 'a');
 }
 
+static inline int tolower(int c) {
+    return (c < 'A' || c > 'Z') ? c : (c + 'a' - 'A');
+}
+
 int atoi(const char* str);
 
 static inline int getchar() {
@@ -559,15 +563,21 @@ static inline int abs(int i) {
 }
 
 static inline char* alloca(size_t size) {
-    // TODO
-    todo();
-    return 0x0;
+    return malloc(size);
 }
 
+// implementation from GNU C Library
+//    https://code.woboq.org/userspace/glibc/string/strcasecmp.c.html
 static inline int strcasecmp(const char* s1, const char* s2) {
-    // TODO
-    todo();
-    return 0;
+    const unsigned char *p1 = (const unsigned char *) s1;
+    const unsigned char *p2 = (const unsigned char *) s2;
+    int result;
+    if (p1 == p2)
+        return 0;
+    while ((result = tolower(*p1) - tolower(*p2++)) == 0)
+        if (*p1++ == '\0')
+            break;
+    return result;
 }
 
 static inline int strncasecmp(const char* s1, const char* s2, size_t n) {
