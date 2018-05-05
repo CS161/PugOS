@@ -117,73 +117,18 @@ DOOM_OBJS = $(DOOM_SRCS_BASE:%.c=$(OBJDIR)/%.o)
 
 PROCESS_LIB_OBJS = $(OBJDIR)/lib.o $(OBJDIR)/p-lib.o $(OBJDIR)/crc32c.co
 PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
-	$(OBJDIR)/p-allocator.o \
-	$(OBJDIR)/p-allocexit.o \
-	$(OBJDIR)/p-cat.o \
 	$(OBJDIR)/p-doom.o \
 	$(OBJDIR)/p-echo.o \
-	$(OBJDIR)/p-execallocexit.o \
-	$(OBJDIR)/p-exececho.o \
-	$(OBJDIR)/p-false.o \
 	$(OBJDIR)/p-init.o \
-	$(OBJDIR)/p-readdiskfile.o \
 	$(OBJDIR)/p-sh.o \
-	$(OBJDIR)/p-testdoom.o \
-	$(OBJDIR)/p-testeintr.o \
-	$(OBJDIR)/p-testscript.o \
-	$(OBJDIR)/p-testgfx.o \
-	$(OBJDIR)/p-testlargemem.o \
-	$(OBJDIR)/p-testmemfs.o \
-	$(OBJDIR)/p-testmsleep.o \
-	$(OBJDIR)/p-testpipe.o \
-	$(OBJDIR)/p-testppid.o \
-	$(OBJDIR)/p-testrwaddr.o \
-	$(OBJDIR)/p-testthread.o \
-	$(OBJDIR)/p-testvfs.o \
-	$(OBJDIR)/p-testwaitpid.o \
-	$(OBJDIR)/p-testwritefs.o \
-	$(OBJDIR)/p-testwritefs2.o \
-	$(OBJDIR)/p-testwritefs3.o \
-	$(OBJDIR)/p-testwritefs4.o \
-	$(OBJDIR)/p-testzombie.o \
-	$(OBJDIR)/p-true.o \
-	$(OBJDIR)/p-wc.o \
-	$(OBJDIR)/p-wcdiskfile.o
-
+	$(OBJDIR)/p-testdoom.o
 
 INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~' 2>/dev/null) \
-	obj/p-allocator \
-	obj/p-allocexit \
-	obj/p-cat \
 	obj/p-doom \
 	obj/p-echo \
-	obj/p-execallocexit \
-	obj/p-exececho \
-	obj/p-false \
 	obj/p-init \
-	obj/p-readdiskfile \
 	obj/p-sh \
-	obj/p-testdoom \
-	obj/p-testeintr \
-	obj/p-testscript \
-	obj/p-testgfx \
-	obj/p-testlargemem \
-	obj/p-testmemfs \
-	obj/p-testmsleep \
-	obj/p-testpipe \
-	obj/p-testppid \
-	obj/p-testrwaddr \
-	obj/p-testthread \
-	obj/p-testvfs \
-	obj/p-testwaitpid \
-	obj/p-testwritefs \
-	obj/p-testwritefs2 \
-	obj/p-testwritefs3 \
-	obj/p-testwritefs4 \
-	obj/p-testzombie \
-	obj/p-true \
-	obj/p-wc \
-	obj/p-wcdiskfile
+	obj/p-testdoom
 
 DISKFS_CONTENTS = $(shell find diskfs -type f -not -name '\#*\#' -not -name '*~' 2>/dev/null) \
 	$(INITFS_CONTENTS)

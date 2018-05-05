@@ -508,10 +508,11 @@ static inline char* strcat(char* s1, const char* s2) {
 
 // pulled from https://code.woboq.org/userspace/glibc/string/strncpy.c.html
 static inline char* strncpy(char* dst, const char* src, size_t len) {
-    for (size_t i = 0; i < len; i++) {
-        dst[i] = src[i];
+    size_t size = strnlen(src, len);
+    if (size != len) {
+        memset (dst + size, '\0', len - size);
     }
-    return dst;
+    return reinterpret_cast<char*>(memcpy(dst, src, size));
 }
 
 
