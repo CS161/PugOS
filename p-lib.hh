@@ -378,9 +378,14 @@ int printf(const char* format, ...);
 
 
 // Stubs for DOOM so we don't have to change source code if possible.
-#define todo()                                          \
-    sys_log_printf("DOOM STUB CALLED: DOOM@ %p: %s\n",  \
-        read_rbp(), __FUNCTION__)
+#define todo()                                              \
+    uintptr_t rsp = read_rsp(), rbp = read_rbp();           \
+    uintptr_t stack_top = ROUNDUP(rsp, PAGESIZE);           \
+    uintptr_t* rbpx = reinterpret_cast<uintptr_t*>(rbp);    \
+    uintptr_t ret_rip = rbpx[1];                            \
+    sys_log_printf("[DOOM] stub func '%s' called by func @ %p\n",      \
+        __FUNCTION__, ret_rip)
+
 
 static inline void exit(int status) {
     sys_exit(status);
