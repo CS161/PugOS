@@ -3,8 +3,6 @@
 void process_main() {
     sys_kdisplay(KDISPLAY_NONE);
 
-    console_printf("stack top: ~%p\n\n", read_rsp());
-
     // test sprintf
     console_printf("testing sprintf...\n");
     const char* tstr = "test string %d %p";
@@ -105,6 +103,8 @@ void process_main() {
         }
     }
     console_printf("malloc tests finished\n\n");
+
+    console_printf("stack top: ~%p\n\n", read_rbp());
 
     sys_exit(0);
 }

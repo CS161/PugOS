@@ -16,7 +16,7 @@ spinlock ptable_lock;           // protects ptable, true_ptable, pid_, ppid_,
 proc::proc()
     : pid_(0), regs_(nullptr), yields_(nullptr),
       state_(blank), pagetable_(nullptr), interrupted_(false), exiting_(false),
-      malloc_top_(0x600000) {
+      malloc_top_(0x4000000) {
 }
 
 
