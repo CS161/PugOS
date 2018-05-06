@@ -1444,6 +1444,20 @@ uintptr_t proc::syscall(regstate* regs) {
         break;
     }
 
+    case SYSCALL_SWAPCOLOR: {
+        uint8_t index = regs->reg_rdi;
+        uint8_t red = regs->reg_rsi;
+        uint8_t green = regs->reg_rdx;
+        uint8_t blue = regs->reg_r10;
+
+        outb(0x3C8, index);
+        outb(0x3C9, red);
+        outb(0x3C9, green);
+        outb(0x3C9, blue);
+        r = 0;
+        break;
+    }
+
     default:
         // no such system call
         log_printf("[%d] no such system call %u\n", pid_, regs->reg_rax);

@@ -358,10 +358,15 @@ static inline int sys_commit_seppuku() {
     return syscall0(SYSCALL_COMMIT_SEPPUKU);
 }
 
-// sys_malloc()
+// sys_malloc(size)
 //    Allocate memory for process
 static inline void* sys_malloc(size_t size) {
     return reinterpret_cast<void*>(syscall0(SYSCALL_MALLOC, size));
+}
+
+// sys_swapcolor(index, r, g, b)
+static inline void sys_swapcolor(uint8_t index, uint8_t r, uint8_t g, uint8_t b) {
+    syscall0(SYSCALL_SWAPCOLOR, index, r, g, b);
 }
 
 // dprintf(fd, format, ...)

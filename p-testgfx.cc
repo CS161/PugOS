@@ -17,15 +17,10 @@ void process_main() {
 		}
 	}
 
-
-	// screen[s_width * s_height] = 0b1010'1010;
-	// for (unsigned i = 0; i < SCREEN_MEMSIZE; ++i) {
-	// 	screen[i] = -1;
-	// }
-
-	// auto addr = pixel_at(0, 0);
-	// sys_log_printf("[GFX] writing to screen at %p\n", addr);
-	// sys_memset(pixel_at(0,0), -1, 1);
-	// sys_memset(pixel_at(1,1), -1, 1);
+	for (unsigned i = 0; i < 256; ++i) {
+		sys_msleep(100);
+		sys_swapcolor(i, 0, 0, 0);
+	}
+	
 	sys_exit(0);
 }

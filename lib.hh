@@ -206,6 +206,7 @@ inline uint32_t crc32c(const void* buf, size_t sz) {
 #define SYSCALL_TEXIT           116
 // DOOM specific calls
 #define SYSCALL_MALLOC          90
+#define SYSCALL_SWAPCOLOR       91
 
 
 // System call error return values
