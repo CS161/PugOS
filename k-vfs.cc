@@ -68,10 +68,10 @@ size_t vnode_kbc::read(uintptr_t buf, size_t sz, size_t& off) {
         kbd.state_ = kbd.input;
     }
 
-    // block until a line is available
-    waiter(current()).block_until(kbd.wq_, [&] () {
-            return sz == 0 || kbd.eol_ != 0;
-        }, kbd.lock_, irqs);
+    // // block until a line is available
+    // waiter(current()).block_until(kbd.wq_, [&] () {
+    //         return sz == 0 || kbd.eol_ != 0;
+    //     }, kbd.lock_, irqs);
 
     // read that line or lines
     size_t n = 0;
