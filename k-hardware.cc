@@ -269,6 +269,8 @@ void panic(const char* format, ...) {
     va_start(val, format);
     panicking = true;
 
+    console_printf("\n\n\n\n\n");
+
     if (format) {
         // Print panic message to both the screen and the log
         int cpos = error_printf(CPOS(23, 0), COLOR_ERROR, "PANIC: ");

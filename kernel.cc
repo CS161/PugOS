@@ -854,23 +854,23 @@ uintptr_t proc::syscall(regstate* regs) {
         size_t sz = regs->reg_rdx;
 
         auto irqs = fdtable_->lock_.lock();
-        debug_printf("[%d] sys_%s on fd %d", pid_,
-            regs->reg_rax == SYSCALL_READ ? "read" : "write", fd);
+        // debug_printf("[%d] sys_%s on fd %d", pid_,
+        //     regs->reg_rax == SYSCALL_READ ? "read" : "write", fd);
         if (fd < 0 || fd >= NFDS || fdtable_->fds_[fd] == nullptr) {
             fdtable_->lock_.unlock(irqs);
             r = E_BADF;
-            debug_printf("; returning E_BADF\n");
+            // debug_printf("; returning E_BADF\n");
             break;
         }
 
         file* f = fdtable_->fds_[fd];
-        debug_printf("; mode r? %s; w? %s\n",
-            f->readable_ ? "yes" : "no", f->writeable_ ? "yes" : "no");
+        // debug_printf("; mode r? %s; w? %s\n",
+        //     f->readable_ ? "yes" : "no", f->writeable_ ? "yes" : "no");
         if ((regs->reg_rax == SYSCALL_READ && !f->readable_)
               || (regs->reg_rax == SYSCALL_WRITE && !f->writeable_)) {
             fdtable_->lock_.unlock(irqs);
             r = E_BADF;
-            debug_printf("\t...returning E_BADF=%d\n", r);
+            // debug_printf("\t...returning E_BADF=%d\n", r);
             break;
         }
 
@@ -910,8 +910,8 @@ uintptr_t proc::syscall(regstate* regs) {
 
         f->deref();
 
-        debug_printf("[%d] sys_%s %d bytes\n", pid_,
-            regs->reg_rax == SYSCALL_READ ? "read read" : "write wrote", r);
+        // debug_printf("[%d] sys_%s %d bytes\n", pid_,
+        //     regs->reg_rax == SYSCALL_READ ? "read read" : "write wrote", r);
 
         break;
     }
@@ -1417,11 +1417,17 @@ uintptr_t proc::syscall(regstate* regs) {
         if (size > (1U << 24)) { // 21 = MAX_ORDER from k-alloc.cc
             log_printf("WARNING: sys_malloc call exceeds maximum size\n");
         }
-        log_printf("[%d] sys_malloc %zu -> proc mem @ 0x%x\n",
-            pid_, size, this->malloc_top_);
+        if (size) {
+            log_printf("[%d] sys_malloc %zu -> proc mem @ 0x%x\n",
+                pid_, size, this->malloc_top_);
+        } else {
+            r = reinterpret_cast<uintptr_t>(nullptr);
+            break;
+        }
 
         auto kaddr = kalloc(size);
         if (!kaddr) {
+            log_printf("WARNING: sys_malloc failed, probably out of memory\n");
             r = reinterpret_cast<uintptr_t>(nullptr);
             break;
         }
