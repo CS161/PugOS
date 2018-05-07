@@ -565,6 +565,8 @@ void proc::exception(regstate* regs) {
         if (sata_disk && regs->reg_intno == INT_IRQ + sata_disk->irq_) {
             sata_disk->handle_interrupt();
         } else {
+            // doom debugging
+            log_printf("FATAL ERROR %%rip = %p\n", regs->reg_rip);
             panic("Unexpected exception %d!\n", regs->reg_intno);
         }
         break;                  /* will not be reached */
