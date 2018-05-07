@@ -1,6 +1,10 @@
 #include "lib.hh"
 #include "x86-64.h"
 
+#ifdef CHICKADEE_PROCESS
+#include "p-lib.hh"
+#endif
+
 // lib.c
 //
 //    Functions useful in both kernel and applications.
@@ -12,6 +16,13 @@ extern "C" {
 //    We must provide our own implementations.
 
 void* memcpy(void* dst, const void* src, size_t n) {
+#ifdef CHICKADEE_PROCESS
+    // uintptr_t rbp = read_rbp();
+    // uintptr_t* rbpx = reinterpret_cast<uintptr_t*>(rbp);
+    // uintptr_t ret_rip = rbpx[1];
+    // sys_log_printf("[DOOM] stub func '%s' called by func @ %p\n",
+    //     __FUNCTION__, ret_rip);
+#endif
     const char* s = (const char*) src;
     for (char* d = (char*) dst; n > 0; --n, ++s, ++d) {
         *d = *s;

@@ -965,13 +965,14 @@ uintptr_t proc::syscall(regstate* regs) {
         const char* path = reinterpret_cast<const char*>(regs->reg_rdi);
         int flags = regs->reg_rsi;
         bool created = false;
-        debug_printf("[%d] sys_open('%s')\n", pid_, path);
 
         auto path_sz = check_string_termination(path, memfile::namesize);
         if (path_sz < 0) {
             r = path_sz;
             break;
         }
+
+        debug_printf("[%d] sys_open('%s')\n", pid_, path);
 
         auto& fs = chkfsstate::get();
 
@@ -1421,6 +1422,7 @@ uintptr_t proc::syscall(regstate* regs) {
             log_printf("[%d] sys_malloc %zu -> proc mem @ 0x%x\n",
                 pid_, size, this->malloc_top_);
         } else {
+            log_printf("WARNING: sys_malloc of size 0 -> nullptr\n");
             r = reinterpret_cast<uintptr_t>(nullptr);
             break;
         }
@@ -1441,6 +1443,20 @@ uintptr_t proc::syscall(regstate* regs) {
 
         r = this->malloc_top_;
         this->malloc_top_ = ROUNDUP(this->malloc_top_ + size + 64, PAGESIZE);
+        break;
+    }
+
+    case SYSCALL_FREE: {
+        uintptr_t ptr = regs->reg_rdi;
+        if (!ptr) {
+            r = 0;
+            break;
+        }
+
+        auto ka = vmiter(this, ptr).ka();
+        log_printf("[%d] sys_free %p -> ka %d\n", pid_, ptr, ka);
+        kfree(ka);
+        r = 0;
         break;
     }
 
