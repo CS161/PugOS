@@ -565,6 +565,8 @@ void proc::exception(regstate* regs) {
         if (sata_disk && regs->reg_intno == INT_IRQ + sata_disk->irq_) {
             sata_disk->handle_interrupt();
         } else {
+            // doom debugging
+            log_printf("FATAL ERROR %%rip = %p\n", regs->reg_rip);
             panic("Unexpected exception %d!\n", regs->reg_intno);
         }
         break;                  /* will not be reached */
@@ -965,13 +967,14 @@ uintptr_t proc::syscall(regstate* regs) {
         const char* path = reinterpret_cast<const char*>(regs->reg_rdi);
         int flags = regs->reg_rsi;
         bool created = false;
-        debug_printf("[%d] sys_open('%s')\n", pid_, path);
 
         auto path_sz = check_string_termination(path, memfile::namesize);
         if (path_sz < 0) {
             r = path_sz;
             break;
         }
+
+        debug_printf("[%d] sys_open('%s')\n", pid_, path);
 
         auto& fs = chkfsstate::get();
 
@@ -1441,6 +1444,20 @@ uintptr_t proc::syscall(regstate* regs) {
 
         r = this->malloc_top_;
         this->malloc_top_ = ROUNDUP(this->malloc_top_ + size + 64, PAGESIZE);
+        break;
+    }
+
+    case SYSCALL_FREE: {
+        uintptr_t ptr = regs->reg_rdi;
+        if (!ptr) {
+            r = 0;
+            break;
+        }
+
+        auto ka = vmiter(this, ptr).ka();
+        log_printf("[%d] sys_free %p -> ka %p\n", pid_, ptr, ka);
+        kfree(ka);
+        r = 0;
         break;
     }
 

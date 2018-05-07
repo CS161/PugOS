@@ -364,6 +364,12 @@ static inline void* sys_malloc(size_t size) {
     return reinterpret_cast<void*>(syscall0(SYSCALL_MALLOC, size));
 }
 
+// sys_free(ptr)
+//    Free memory for process
+static inline void sys_free(void* ptr) {
+    syscall0(SYSCALL_FREE, reinterpret_cast<uintptr_t>(ptr));
+}
+
 // sys_swapcolor(index, r, g, b)
 static inline void sys_swapcolor(uint8_t index, uint8_t r, uint8_t g, uint8_t b) {
     syscall0(SYSCALL_SWAPCOLOR, index, r, g, b);
@@ -398,6 +404,10 @@ static inline void exit(int status) {
 
 static inline char* malloc(int size) {
     return (char*) sys_malloc(size);
+}
+
+static inline void free(void* ptr) {
+    sys_free(ptr);
 }
 
 static inline char* realloc(char* ptr, size_t size, size_t oldsize) {
@@ -566,7 +576,14 @@ static inline int abs(int i) {
     return i < 0 ? -i : i;
 }
 
-static inline char* alloca(size_t size) {
+#define alloca(size) ({ \
+    uintptr_t r = read_rsp(); \
+    if (size) { \
+        r = alloca_(size); \
+    } \
+    r;})
+
+static inline char* alloca_(size_t size) {
     return malloc(size);
 }
 
