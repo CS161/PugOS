@@ -402,7 +402,6 @@ static inline void exit(int status) {
 }
 
 static inline char* malloc(int size) {
-    todo();
     return (char*) sys_malloc(size);
 }
 
