@@ -77,6 +77,8 @@ int keyboard_readc() {
     static uint8_t modifiers;
     static uint8_t last_escape;
 
+    bool released = false;
+
     if ((inb(KEYBOARD_STATUSREG) & KEYBOARD_STATUS_READY) == 0) {
         return -1;
     }
@@ -89,11 +91,13 @@ int keyboard_readc() {
         last_escape = 0x80;
         return 0;
     } else if (data & 0x80) {   // key release: matters only for modifier keys
-        int ch = keymap[(data & 0x7F) | escape];
-        if (ch >= KEY_SHIFT && ch < KEY_CAPSLOCK) {
-            modifiers &= ~(1 << (ch - KEY_SHIFT));
-        }
-        return 0;
+        // int ch = keymap[(data & 0x7F) | escape];
+        // if (ch >= KEY_SHIFT && ch < KEY_CAPSLOCK) {
+        //     modifiers &= ~(1 << (ch - KEY_SHIFT));
+        // }
+        // return 0;
+        data &= ~0x80;
+        released = true;
     }
 
     int ch = (unsigned char) keymap[data | escape];
@@ -116,9 +120,12 @@ int keyboard_readc() {
         ch = 0;
     }
 
+    if (released && ch != -1) {
+        ch += 256;
+    }
+
     return ch;
 }
-
 
 // the global `keyboardstate` singleton
 keyboardstate keyboardstate::kbd;
@@ -132,7 +139,7 @@ void keyboardstate::handle_interrupt() {
 
     int ch;
     while ((ch = keyboard_readc()) >= 0) {
-        bool want_eol = false;
+        bool want_eol = true;
         switch (ch) {
         case 0: // try again
             break;

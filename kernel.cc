@@ -1421,8 +1421,8 @@ uintptr_t proc::syscall(regstate* regs) {
             log_printf("WARNING: sys_malloc call exceeds maximum size\n");
         }
         if (size) {
-            log_printf("[%d] sys_malloc %zu -> proc mem @ 0x%x\n",
-                pid_, size, this->malloc_top_);
+            // debug_printf("[%d] sys_malloc %zu -> proc mem @ 0x%x\n",
+            //     pid_, size, this->malloc_top_);
         } else {
             log_printf("WARNING: sys_malloc of size 0 -> nullptr\n");
             r = reinterpret_cast<uintptr_t>(nullptr);

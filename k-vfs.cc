@@ -83,7 +83,7 @@ size_t vnode_kbc::read(uintptr_t buf, size_t sz, size_t& off) {
             }
             break;
         } else {
-            *reinterpret_cast<char*>(buf) = kbd.buf_[kbd.pos_];
+            *reinterpret_cast<int*>(buf) = kbd.buf_[kbd.pos_];
             ++buf;
             ++n;
             kbd.consume(1);

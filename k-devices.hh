@@ -24,7 +24,7 @@ void console_show_cursor(int cpos);
 
 struct keyboardstate {
     spinlock lock_;
-    char buf_[256];
+    int buf_[256];
     unsigned pos_;      // next position to read
     unsigned len_;      // number of characters in buffer
     unsigned eol_;      // position in buffer of most recent \n
