@@ -1421,7 +1421,7 @@ uintptr_t proc::syscall(regstate* regs) {
             log_printf("WARNING: sys_malloc call exceeds maximum size\n");
         }
         if (size) {
-            // debug_printf("[%d] sys_malloc %zu -> proc mem @ 0x%x\n",
+            // log_printf("[%d] sys_malloc %zu -> proc mem @ 0x%x\n",
             //     pid_, size, this->malloc_top_);
         } else {
             log_printf("WARNING: sys_malloc of size 0 -> nullptr\n");
@@ -1456,7 +1456,7 @@ uintptr_t proc::syscall(regstate* regs) {
         }
 
         auto ka = vmiter(this, ptr).ka();
-        log_printf("[%d] sys_free %p -> ka %d\n", pid_, ptr, ka);
+        // log_printf("[%d] sys_free %p -> ka %d\n", pid_, ptr, ka);
         kfree(ka);
         r = 0;
         break;
