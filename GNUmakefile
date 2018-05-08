@@ -122,7 +122,8 @@ PROCESS_OBJS = $(PROCESS_LIB_OBJS) \
 	$(OBJDIR)/p-init.o \
 	$(OBJDIR)/p-sh.o \
 	$(OBJDIR)/p-testdoom.o \
-	$(OBJDIR)/p-testgfx.o
+	$(OBJDIR)/p-testgfx.o \
+	$(OBJDIR)/p-teststack.o
 
 INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~' 2>/dev/null) \
 	obj/p-doom \
@@ -130,7 +131,8 @@ INITFS_CONTENTS = $(shell find initfs -type f -not -name '\#*\#' -not -name '*~'
 	obj/p-init \
 	obj/p-sh \
 	obj/p-testdoom \
-	obj/p-testgfx
+	obj/p-testgfx \
+	obj/p-teststack
 
 DISKFS_CONTENTS = $(shell find diskfs -type f -not -name '\#*\#' -not -name '*~' 2>/dev/null) \
 	$(INITFS_CONTENTS)

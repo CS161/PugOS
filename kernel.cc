@@ -537,8 +537,30 @@ void proc::exception(regstate* regs) {
     }
 
     case INT_PAGEFAULT: {
-        // Analyze faulting address and access type.
         uintptr_t addr = rcr2();
+
+        // need more stack space?
+        if (addr <= regs->reg_rsp && addr > regs->reg_rsp - 64) {
+            debug_printf("PAGEFAULT:\n"
+                "\taddr:%p\n"
+                "\t%%rip:%p\n"
+                "\t%%rsp:%p\n"
+                "\t%%rsp-64:%p\n",
+                addr, regs->reg_rip, regs->reg_rsp, regs->reg_rsp - 64);
+
+            auto npg = reinterpret_cast<uintptr_t>(kallocpage());
+            if (!npg || vmiter(this, ROUNDDOWN(addr, PAGESIZE)).map(
+                                        ka2pa(npg), PTE_P | PTE_U | PTE_W) < 0){
+                panic("No memory to grow process %d stack (rip=%p)!\n",
+                    pid_, regs->reg_rip);
+            }
+
+            debug_printf("[%d] pagefault mapped extra page in process stack\n",
+                pid_);
+            break;
+        }
+
+        // Analyze faulting address and access type.
         const char* operation = regs->reg_err & PFERR_WRITE
                 ? "write" : "read";
         const char* problem = regs->reg_err & PFERR_PRESENT
