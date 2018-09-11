@@ -1,6 +1,6 @@
 # PugOS for DOOM
 
-This is a modified version of Harvard's Operating Systems class teaching OS done by Lucas Cassels and Max Levenson as our final project for the course. See our [DOOM repo](https://github.com/CS161/doom) for the DOOM port that runs on this OS!
+This is a modified version of Harvard's Operating Systems class teaching OS done by Lucas Cassels and Max Levenson as our final project for the course. See our [DOOM repo](https://github.com/lcassels/doom) for the DOOM port that runs on this OS!
 
 Major OS additions:
 - Implemented numerous Linux syscalls needed by DOOM, such as alloca, various string manipulation functions, free, lseek, etc.
