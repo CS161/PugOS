@@ -6,8 +6,8 @@ Major OS additions:
 - Implemented numerous Linux syscalls needed by DOOM, such as alloca, various string manipulation functions, free, lseek, etc.
 - Added a compile-time switch (-GFX) for MMIO graphics interfacing via VGA mode 13h for a 320x200x8 screen
 - Added support for programming the graphics card's color palette via the I/O port
-- Created a system for de-activating debug messages by file and function (de-activate debug messages are compiled out of the executable) using macros and const functions
-- The stack will automatically grow when it runs out of allocated memory
+- Created a system for de-activating debug messages by file and function (de-activated debug messages are compiled out of the executable) using macros and const functions
+- The stack will automatically grow when/if it runs out of allocated memory
 - Implemented real-time keyboard input for DOOM controls
 
 
