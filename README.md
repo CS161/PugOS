@@ -15,6 +15,7 @@ Major OS additions:
 
 - QEMU
 - GCC
+- Linux (tested on Ubuntu)
 
 
 ## Running DOOM
